@@ -127,7 +127,7 @@ Authoritative reference: `Documentation/api/STANDARD_API.md` + in-repo `swagger/
 | Domain | Table(s) | API access |
 |---|---|---|
 | Patients / demographics | `patient_data` | REST `patient`, FHIR `Patient` |
-| Appointments + provider availability | `pc_event` (+ `openemr_postcalendar_categories`) | REST `appointment` (CRUS), FHIR `Appointment` (read) |
+| Appointments + provider availability | `openemr_postcalendar_events` (+ `openemr_postcalendar_categories`) — verified in a live 8.0.0.3 install; the STANDARD_API doc calls this `pc_event`, which is legacy naming | REST `appointment` (CRUS), FHIR `Appointment` (read) |
 | Encounters / visits | `form_encounter`, `forms` | REST `encounter`, FHIR `Encounter` |
 | Problems / diagnoses | `lists` (type `medical_problem`) | FHIR `Condition` |
 | Allergies | `lists` (type `allergy`) | FHIR `AllergyIntolerance` |
@@ -158,6 +158,8 @@ Authoritative reference: `Documentation/api/STANDARD_API.md` + in-repo `swagger/
 | # | Risk | Severity | Mitigation |
 |---|---|---|---|
 | R1 | No slot endpoint → naive slot logic could double-book | High | Adapter computes slots then **re-validates on create** (fetch conflicts just before POST); demo uses low concurrency; future custom module for atomic hold |
+| R8 | Newly registered OAuth clients are **disabled by default** — token exchange fails with `invalid_client` until an admin enables them (Administration → System → API Clients, or `UPDATE oauth_clients SET is_enabled=1`). Verified against 8.0.0.3 | Low | Documented in INSTALL_NOTES; adapter setup script enables its client immediately after registration |
+| R9 | FHIR scope strings are strict — `.rs` is safe for reads; some cruds combinations like `.cru` are rejected. Verified against 8.0.0.3 | Low | Use only `.rs` for FHIR reads; use lowercase `user/appointment.cruds` for the REST Standard API (not FHIR) for scheduling writes |
 | R2 | Password grant in production | High | Demo-only; ADR mandates client_credentials + JWKS before staging/prod |
 | R3 | OpenEMR version upgrades change API behavior | Medium | Pin tested OpenEMR version in env docs; adapter isolates all OpenEMR calls in one client module; contract tests in Phase 2 |
 | R4 | PHI exposure through our layer | High | Role-scoped BFF endpoints, no PHI in logs, no PHI in mock data (fully synthetic), audit trail on writes |
