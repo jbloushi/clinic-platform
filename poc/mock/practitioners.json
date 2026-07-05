@@ -1,0 +1,55 @@
+{
+  "_comment": "Planning-phase sample of the mock shape (fully synthetic). Phase 1 Task 1.3 expands this to >=6 doctors as deterministic seed data.",
+  "practitioners": [
+    {
+      "id": "prac_001",
+      "firstName": "Amina",
+      "lastName": "Haddad",
+      "title": "Dr.",
+      "specialty": "Internal Medicine",
+      "bio": "Consultant internist focusing on preventive care and chronic disease management (diabetes, hypertension, thyroid disorders).",
+      "photoUrl": null,
+      "consultationFee": 15000,
+      "currency": "USD",
+      "active": true,
+      "availability": [
+        { "dayOfWeek": 0, "startTime": "09:00", "endTime": "13:00", "slotMinutes": 20 },
+        { "dayOfWeek": 2, "startTime": "09:00", "endTime": "13:00", "slotMinutes": 20 },
+        { "dayOfWeek": 4, "startTime": "14:00", "endTime": "18:00", "slotMinutes": 20 }
+      ]
+    },
+    {
+      "id": "prac_002",
+      "firstName": "Yusuf",
+      "lastName": "Rahman",
+      "title": "Dr.",
+      "specialty": "Cardiology",
+      "bio": "Cardiologist with a focus on hypertension, arrhythmia workup, and cardiac risk assessment. Performs ECG and echocardiography review.",
+      "photoUrl": null,
+      "consultationFee": 25000,
+      "currency": "USD",
+      "active": true,
+      "availability": [
+        { "dayOfWeek": 1, "startTime": "10:00", "endTime": "14:00", "slotMinutes": 30 },
+        { "dayOfWeek": 3, "startTime": "10:00", "endTime": "14:00", "slotMinutes": 30 }
+      ]
+    },
+    {
+      "id": "prac_003",
+      "firstName": "Sara",
+      "lastName": "Khalil",
+      "title": "Dr.",
+      "specialty": "Pediatrics",
+      "bio": "Pediatrician covering well-child visits, immunization schedules, and common childhood illnesses.",
+      "photoUrl": null,
+      "consultationFee": 12000,
+      "currency": "USD",
+      "active": true,
+      "availability": [
+        { "dayOfWeek": 0, "startTime": "14:00", "endTime": "18:00", "slotMinutes": 15 },
+        { "dayOfWeek": 1, "startTime": "09:00", "endTime": "13:00", "slotMinutes": 15 },
+        { "dayOfWeek": 3, "startTime": "09:00", "endTime": "13:00", "slotMinutes": 15 }
+      ]
+    }
+  ]
+}
