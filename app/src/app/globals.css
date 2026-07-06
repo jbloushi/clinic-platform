@@ -4,53 +4,150 @@
 
 @layer base {
   :root {
-    /* Neutral surface — clean medical SaaS */
-    --background: 210 20% 98%;
-    --foreground: 220 25% 15%;
+    /* Neutral surface — clean, calm medical SaaS */
+    --background: 210 40% 98.5%;
+    --foreground: 222 32% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 15%;
+    --card-foreground: 222 32% 12%;
 
-    /* Soft blue primary → navy on hover */
-    --primary: 217 91% 55%;
+    /* Soft-blue → navy primary */
+    --primary: 217 90% 55%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 30% 96%;
-    --secondary-foreground: 220 25% 20%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 32% 16%;
 
-    --muted: 210 20% 96%;
-    --muted-foreground: 220 15% 45%;
+    --muted: 214 32% 96%;
+    --muted-foreground: 222 12% 42%;
 
-    --accent: 210 30% 94%;
-    --accent-foreground: 220 25% 15%;
+    --accent: 214 32% 94%;
+    --accent-foreground: 222 32% 12%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 15% 90%;
     --input: 220 15% 90%;
-    --ring: 217 91% 55%;
+    --ring: 217 90% 55%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;
 
     /* Booking status colors — single source of truth */
-    --status-held: 38 92% 50%;         /* amber */
-    --status-pending: 32 95% 44%;      /* darker amber */
-    --status-confirmed: 217 91% 55%;   /* primary blue */
-    --status-checkedin: 173 80% 40%;   /* teal */
-    --status-completed: 142 71% 45%;   /* green */
-    --status-cancelled: 220 10% 55%;   /* gray */
-    --status-noshow: 0 72% 51%;        /* red */
+    --status-held: 38 92% 50%;
+    --status-pending: 32 95% 44%;
+    --status-confirmed: 217 90% 55%;
+    --status-checkedin: 173 80% 40%;
+    --status-completed: 142 71% 45%;
+    --status-cancelled: 220 10% 55%;
+    --status-noshow: 0 72% 51%;
+
+    /* Motion tokens */
+    --motion-fast: 120ms;
+    --motion-base: 180ms;
+    --motion-slow: 260ms;
+    --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
   }
 }
 
 @layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground antialiased; }
-  html { font-feature-settings: 'cv02','cv03','cv04','cv11'; }
+  *,
+  ::before,
+  ::after {
+    @apply border-border;
+  }
+  html {
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: 'ss01' on, 'cv11' on;
+  }
+
+  /* Tabular numerals on data — keeps stats & tables aligned */
+  th,
+  td,
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Consistent, visible focus rings on ALL interactive elements */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  /* Base interactive transitions */
+  a,
+  button,
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'],
+  input,
+  textarea,
+  select {
+    transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+    transition-duration: var(--motion-base);
+    transition-timing-function: var(--ease-out-quart);
+  }
+
+  /* Honor reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+    color: hsl(var(--foreground));
+  }
 }
 
-/* Utility for RTL-ready horizontal spacing (future) */
+@layer components {
+  /* Reusable soft-background glow for hero sections */
+  .glow-radial {
+    background:
+      radial-gradient(50% 60% at 15% 0%, hsl(var(--primary) / 0.10), transparent 70%),
+      radial-gradient(45% 55% at 85% 0%, hsl(173 80% 55% / 0.08), transparent 70%);
+  }
+
+  .card-hover {
+    @apply transition-all;
+    transition-duration: var(--motion-base);
+    transition-timing-function: var(--ease-out-quart);
+  }
+  .card-hover:hover {
+    @apply -translate-y-0.5 shadow-md;
+    border-color: hsl(var(--primary) / 0.35);
+  }
+
+  .press-scale {
+    transition-property: transform, box-shadow;
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--ease-out-quart);
+  }
+  .press-scale:active {
+    transform: scale(0.985);
+  }
+}
+
 @layer utilities {
-  .surface-1 { @apply bg-card border rounded-lg; }
-  .surface-2 { @apply bg-secondary/50 border rounded-md; }
+  .surface-1 {
+    @apply bg-card border rounded-lg;
+  }
+  .surface-2 {
+    @apply bg-secondary/50 border rounded-md;
+  }
+  /* Utility for status dot */
+  .status-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full;
+  }
 }

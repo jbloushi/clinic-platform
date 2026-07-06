@@ -1,7 +1,8 @@
-import { CalendarDays, Users, Wallet, Stethoscope } from 'lucide-react';
+import { CalendarDays, LayoutDashboard, Stethoscope, Users, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { PageHeader } from '@/components/domain/page-header';
+import { StatCard } from '@/components/domain/stat-card';
 import { StatusBadge } from '@/components/domain/status-badge';
 import { EmptyState } from '@/components/domain/states';
 import { getDataProvider } from '@/lib/data';
@@ -34,15 +35,40 @@ export default async function OpsDashboardPage() {
     .then((r) => r._sum.amountMinor ?? 0);
   const noShowCount = todaysAppointments.filter((a) => a.status === 'no_show').length;
 
+  const checkedIn = todaysAppointments.filter((a) => a.status === 'checked_in').length;
+  const completed = todaysAppointments.filter((a) => a.status === 'completed').length;
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Today at a glance" description={new Date().toDateString()} />
+      <PageHeader
+        eyebrow="Overview"
+        icon={<LayoutDashboard className="h-5 w-5" />}
+        title="Today at a glance"
+        description={new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat icon={<CalendarDays className="h-4 w-4" />} label="Appointments" value={String(todaysAppointments.length)} />
-        <Stat icon={<Wallet className="h-4 w-4" />} label="Revenue today" value={formatCurrency(revenueMinor)} />
-        <Stat icon={<Users className="h-4 w-4" />} label="Patients (total)" value={String(patientTotal)} />
-        <Stat icon={<Stethoscope className="h-4 w-4" />} label="Active providers" value={String(practitioners.length)} />
+        <StatCard
+          icon={<CalendarDays className="h-4 w-4" />}
+          label="Appointments"
+          value={String(todaysAppointments.length)}
+          helper={completed > 0 ? `${completed} completed · ${checkedIn} in room` : undefined}
+        />
+        <StatCard
+          icon={<Wallet className="h-4 w-4" />}
+          label="Revenue today"
+          value={formatCurrency(revenueMinor)}
+        />
+        <StatCard
+          icon={<Users className="h-4 w-4" />}
+          label="Patients (total)"
+          value={String(patientTotal)}
+        />
+        <StatCard
+          icon={<Stethoscope className="h-4 w-4" />}
+          label="Active providers"
+          value={String(practitioners.length)}
+        />
       </div>
 
       <Card>
@@ -86,16 +112,3 @@ export default async function OpsDashboardPage() {
   );
 }
 
-function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <Card>
-      <CardContent className="flex items-center gap-3 pt-6">
-        <div className="rounded-md bg-primary/10 p-2 text-primary">{icon}</div>
-        <div>
-          <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-          <p className="text-xl font-semibold">{value}</p>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}

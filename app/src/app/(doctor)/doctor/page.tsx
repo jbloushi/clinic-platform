@@ -1,8 +1,9 @@
 import Link from 'next/link';
-import { CalendarDays, Users } from 'lucide-react';
+import { CalendarDays, CheckCircle2, LayoutDashboard, Users } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/domain/page-header';
+import { StatCard } from '@/components/domain/stat-card';
 import { StatusBadge } from '@/components/domain/status-badge';
 import { EmptyState } from '@/components/domain/states';
 import { getDataProvider } from '@/lib/data';
@@ -29,20 +30,24 @@ export default async function DoctorDashboardPage() {
   }
   const next = appointments.find((a) => new Date(a.start).getTime() > Date.now());
 
+  const done = appointments.filter((a) => a.status === 'completed').length;
+
   return (
     <div className="space-y-6">
-      <PageHeader title={`Good day, Dr. ${staff.firstName}`} description={new Date().toDateString()} />
+      <PageHeader
+        eyebrow="Overview"
+        icon={<LayoutDashboard className="h-5 w-5" />}
+        title={`Good day, Dr. ${staff.firstName}`}
+        description={new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+      />
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
-          <CardContent className="flex items-center gap-3 pt-6">
-            <div className="rounded-md bg-primary/10 p-2 text-primary"><CalendarDays className="h-4 w-4" /></div>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Appointments today</p>
-              <p className="text-xl font-semibold">{appointments.length}</p>
-            </div>
-          </CardContent>
-        </Card>
+        <StatCard
+          icon={<CalendarDays className="h-4 w-4" />}
+          label="Appointments today"
+          value={String(appointments.length)}
+          helper={done > 0 ? `${done} completed` : undefined}
+        />
         <Card>
           <CardHeader className="py-4"><CardTitle className="text-sm text-muted-foreground">Next patient</CardTitle></CardHeader>
           <CardContent>

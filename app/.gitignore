@@ -6,4 +6,5 @@ build/
 .env.local
 *.log
 .tsbuildinfo
+.devlog
 prisma/dev.db*

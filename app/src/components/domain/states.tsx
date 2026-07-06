@@ -4,7 +4,11 @@ import type { ReactNode } from 'react';
 
 export function LoadingState({ label = 'Loading…', className }: { label?: string; className?: string }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground', className)}>
+    <div
+      className={cn('flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground', className)}
+      role="status"
+      aria-live="polite"
+    >
       <Loader2 className="h-5 w-5 animate-spin" />
       <span className="text-sm">{label}</span>
     </div>
@@ -25,11 +29,13 @@ export function EmptyState({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-3 py-14 text-center', className)}>
-      <div className="rounded-full bg-muted p-3 text-muted-foreground">{icon ?? <Inbox className="h-5 w-5" />}</div>
+    <div className={cn('flex flex-col items-center justify-center gap-4 py-14 px-6 text-center', className)}>
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted text-muted-foreground ring-8 ring-muted/60">
+        {icon ?? <Inbox className="h-5 w-5" />}
+      </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium">{title}</p>
-        {description && <p className="text-sm text-muted-foreground max-w-sm">{description}</p>}
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {description && <p className="mx-auto max-w-sm text-sm text-muted-foreground">{description}</p>}
       </div>
       {action}
     </div>
@@ -46,13 +52,16 @@ export function ErrorState({
   className?: string;
 }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-3 py-14 text-center', className)}>
-      <div className="rounded-full bg-red-100 p-3 text-red-700">
+    <div
+      className={cn('flex flex-col items-center justify-center gap-4 py-14 px-6 text-center', className)}
+      role="alert"
+    >
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-700 ring-8 ring-red-50">
         <AlertCircle className="h-5 w-5" />
       </div>
       <div className="space-y-1">
-        <p className="text-sm font-medium">{title}</p>
-        {description && <p className="text-sm text-muted-foreground max-w-sm">{description}</p>}
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        {description && <p className="mx-auto max-w-lg text-sm text-muted-foreground break-words">{description}</p>}
       </div>
     </div>
   );

@@ -2,19 +2,22 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { CheckCircle2, CreditCard, Lock, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Stepper } from '@/components/domain/stepper';
 import { formatCurrency } from '@/lib/utils';
 
 type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMinor: number };
 
-/**
- * Single-page booking stepper: details → OTP → mock pay → confirmed.
- * The moment "verify OTP" succeeds we also register the patient in OpenEMR (if
- * new), then create the appointment. Payment is mocked but recorded.
- */
+const STEPS = [
+  { key: 'details', label: 'Your details' },
+  { key: 'code', label: 'Verify' },
+  { key: 'pay', label: 'Confirm & pay' },
+];
+
 export function BookingForm({
   practitionerId,
   start,
@@ -32,6 +35,7 @@ export function BookingForm({
 }) {
   const router = useRouter();
   const [step, setStep] = useState<'details' | 'code' | 'pay'>('details');
+  const currentIndex = step === 'details' ? 0 : step === 'code' ? 1 : 2;
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [mobile, setMobile] = useState('');
@@ -114,98 +118,192 @@ export function BookingForm({
     }
   }
 
-  if (step === 'details') {
-    return (
-      <form onSubmit={requestOtp} className="space-y-4">
-        <Card>
-          <CardContent className="space-y-4 pt-6">
-            <div className="space-y-2">
-              <Label>Service</Label>
-              <select
-                value={serviceId}
-                onChange={(e) => setServiceId(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              >
-                {services.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} — {formatCurrency(s.priceMinor, currency)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="fn">First name</Label>
-                <Input id="fn" required value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="ln">Last name</Label>
-                <Input id="ln" required value={lastName} onChange={(e) => setLastName(e.target.value)} />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="m">Mobile number</Label>
-              <Input id="m" type="tel" required value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="+1 555 123 4567" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="r">Reason for visit (optional)</Label>
-              <Input id="r" value={reason} onChange={(e) => setReason(e.target.value)} />
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </CardContent>
-        </Card>
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Sending code…' : 'Continue'}
-        </Button>
-      </form>
-    );
-  }
-
-  if (step === 'code') {
-    return (
-      <form onSubmit={verifyOtp} className="space-y-4">
-        <Card>
-          <CardContent className="space-y-4 pt-6">
-            <p className="text-sm text-muted-foreground">A 6-digit code was sent to <span className="font-medium text-foreground">{mobile}</span>.</p>
-            <div className="space-y-2">
-              <Label htmlFor="code">Verification code</Label>
-              <Input
-                id="code"
-                inputMode="numeric"
-                maxLength={6}
-                pattern="\d{6}"
-                required
-                className="text-center text-2xl tracking-[0.5em]"
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-              />
-              <p className="text-xs text-muted-foreground">Demo: use <code className="rounded bg-muted px-1">123456</code>.</p>
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-          </CardContent>
-        </Card>
-        <Button type="submit" className="w-full" disabled={loading}>
-          {loading ? 'Verifying…' : 'Verify'}
-        </Button>
-      </form>
-    );
-  }
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="space-y-2 pt-6">
-          <div className="flex items-baseline justify-between">
-            <span>{service?.name ?? 'Consultation'}</span>
-            <span className="text-lg font-semibold">{formatCurrency(feeMinor, currency)}</span>
+    <div className="space-y-6">
+      <Stepper steps={STEPS} current={currentIndex} />
+
+      {step === 'details' && (
+        <form onSubmit={requestOtp} className="space-y-4">
+          <Card>
+            <CardContent className="space-y-5 pt-6">
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {services.map((s) => {
+                    const active = s.id === serviceId;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setServiceId(s.id)}
+                        className={`flex items-center justify-between rounded-md border p-3 text-left transition-all press-scale ${
+                          active
+                            ? 'border-primary bg-primary/5 ring-1 ring-primary/40'
+                            : 'hover:border-primary/40'
+                        }`}
+                      >
+                        <div>
+                          <p className="text-sm font-medium">{s.name}</p>
+                          <p className="text-xs text-muted-foreground tabular-nums">
+                            {s.durationMinutes} min
+                          </p>
+                        </div>
+                        <p className="text-sm font-semibold tabular-nums">
+                          {formatCurrency(s.priceMinor, currency)}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="fn">First name</Label>
+                  <Input
+                    id="fn"
+                    required
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="ln">Last name</Label>
+                  <Input
+                    id="ln"
+                    required
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="m">Mobile number</Label>
+                <Input
+                  id="m"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  required
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value)}
+                  placeholder="+1 555 123 4567"
+                />
+                <p className="text-xs text-muted-foreground">
+                  We&apos;ll text a one-time code to verify it&apos;s you.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="r">Reason for visit (optional)</Label>
+                <Input id="r" value={reason} onChange={(e) => setReason(e.target.value)} />
+              </div>
+              {error && (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                  {error}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <Button type="submit" size="lg" className="w-full" disabled={loading}>
+            {loading ? 'Sending code…' : 'Continue'}
+          </Button>
+        </form>
+      )}
+
+      {step === 'code' && (
+        <form onSubmit={verifyOtp} className="space-y-4">
+          <Card>
+            <CardContent className="space-y-4 pt-6">
+              <p className="text-sm text-muted-foreground">
+                We sent a 6-digit code to{' '}
+                <span className="font-medium text-foreground">{mobile}</span>.
+              </p>
+              <div className="space-y-2">
+                <Label htmlFor="code" className="sr-only">
+                  Verification code
+                </Label>
+                <Input
+                  id="code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  pattern="\d{6}"
+                  required
+                  className="h-14 text-center text-2xl tracking-[0.5em] tabular-nums"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+                  aria-label="6-digit verification code"
+                />
+                <p className="text-center text-xs text-muted-foreground">
+                  Demo code is{' '}
+                  <code className="rounded bg-muted px-1 py-0.5 tabular-nums">123456</code>.
+                </p>
+              </div>
+              {error && (
+                <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+                  {error}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={() => setStep('details')} disabled={loading}>
+              Back
+            </Button>
+            <Button type="submit" size="lg" className="flex-1" disabled={loading}>
+              {loading ? 'Verifying…' : 'Verify'}
+            </Button>
           </div>
-          <p className="text-xs text-muted-foreground">Mock payment for the demo. In production this becomes a real card checkout.</p>
-        </CardContent>
-      </Card>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <Button onClick={pay} className="w-full" disabled={loading}>
-        {loading ? 'Confirming…' : `Pay ${formatCurrency(feeMinor, currency)} & confirm`}
-      </Button>
+        </form>
+      )}
+
+      {step === 'pay' && (
+        <div className="space-y-4">
+          <Card>
+            <CardContent className="space-y-3 pt-6">
+              <div className="flex items-center justify-between gap-3 border-b pb-3">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Service</p>
+                  <p className="font-medium">{service?.name ?? 'Consultation'}</p>
+                </div>
+                <p className="text-lg font-semibold tabular-nums">{formatCurrency(feeMinor, currency)}</p>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total</span>
+                <span className="text-xl font-semibold tabular-nums">{formatCurrency(feeMinor, currency)}</span>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-dashed">
+            <CardContent className="flex items-center gap-3 pt-6 text-sm text-muted-foreground">
+              <CreditCard className="h-4 w-4" aria-hidden />
+              Mock payment for the demo. In production this is a secure card checkout.
+              <ShieldCheck className="ml-auto h-4 w-4 text-emerald-600" aria-hidden />
+            </CardContent>
+          </Card>
+          {error && (
+            <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+              {error}
+            </p>
+          )}
+          <Button onClick={pay} size="lg" className="w-full" disabled={loading}>
+            {loading ? (
+              'Confirming…'
+            ) : (
+              <>
+                <Lock className="mr-1 h-4 w-4" />
+                Pay {formatCurrency(feeMinor, currency)} &amp; confirm
+              </>
+            )}
+          </Button>
+          <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
+            You&apos;ll get an instant confirmation
+          </p>
+        </div>
+      )}
     </div>
   );
 }
