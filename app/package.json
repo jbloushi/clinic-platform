@@ -10,8 +10,8 @@
     "typecheck": "tsc --noEmit",
     "prisma:push": "prisma db push",
     "prisma:seed": "tsx --env-file=.env prisma/seed.ts",
-    "openemr:seed": "tsx scripts/seed-openemr.ts",
-    "setup": "prisma db push && tsx prisma/seed.ts"
+    "seed": "tsx --env-file=.env scripts/seed-openemr.ts",
+    "setup": "prisma db push && tsx --env-file=.env prisma/seed.ts && tsx --env-file=.env scripts/seed-openemr.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

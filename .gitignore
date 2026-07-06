@@ -35,6 +35,8 @@ Thumbs.db
 # Test / coverage
 coverage/
 
-# OpenEMR instance — never vendor OpenEMR source into this repo
-openemr/
-openemr-*/
+# OpenEMR instance — never vendor OpenEMR *source* into this repo.
+# Anchored to the repo root so this does NOT match the adapter code at
+# app/src/lib/data/openemr/ (which must be committed).
+/openemr/
+/openemr-*/
