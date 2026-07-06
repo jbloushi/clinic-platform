@@ -1,0 +1,146 @@
+
+> clinic-platform@0.1.0 dev
+> next dev -p 3000
+
+   ▲ Next.js 15.5.20
+   - Local:        http://localhost:3000
+   - Network:      http://172.28.0.1:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 2.8s
+ ○ Compiling / ...
+ ✓ Compiled / in 2.1s (614 modules)
+ GET / 200 in 631ms
+ ○ Compiling /api/auth/staff/login ...
+ ✓ Compiled /api/auth/staff/login in 588ms (659 modules)
+ POST /api/auth/staff/login 200 in 906ms
+ ○ Compiling /api/providers ...
+ ✓ Compiled /api/providers in 918ms (797 modules)
+ POST /api/providers 200 in 2446ms
+ ✓ Compiled /api/providers/[id]/availability in 230ms (799 modules)
+ PUT /api/providers/a230bd24-bd45-49ab-829a-ad5cded8cfe4/availability 200 in 1142ms
+ ✓ Compiled /doctors in 310ms (811 modules)
+ GET /doctors 200 in 2001ms
+ ○ Compiling /doctors/[id] ...
+ ✓ Compiled /doctors/[id] in 516ms (857 modules)
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 3846ms
+ ✓ Compiled /api/auth/patient/request-otp in 207ms (859 modules)
+ POST /api/auth/patient/request-otp 200 in 281ms
+ ✓ Compiled /api/auth/patient/verify-otp in 198ms (861 modules)
+ POST /api/auth/patient/verify-otp 200 in 268ms
+ ✓ Compiled /api/bookings in 211ms (863 modules)
+ POST /api/bookings 502 in 1469ms
+ ✓ Compiled in 400ms (877 modules)
+ POST /api/auth/staff/login 200 in 130ms
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 2068ms
+ POST /api/auth/patient/request-otp 200 in 40ms
+ POST /api/auth/patient/verify-otp 200 in 46ms
+ POST /api/bookings 200 in 2397ms
+ ✓ Compiled /book/confirmed in 358ms (847 modules)
+ GET /book/confirmed?id=cmr8k3awq0009gm9hn0lpk1tr 200 in 1748ms
+ ✓ Compiled in 254ms (259 modules)
+ ✓ Compiled in 196ms (259 modules)
+ ✓ Compiled in 133ms (259 modules)
+ ✓ Compiled /doctors/[id] in 391ms (559 modules)
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 2745ms
+ ✓ Compiled /api/auth/patient/request-otp in 100ms (578 modules)
+ POST /api/auth/patient/request-otp 200 in 233ms
+ ✓ Compiled /api/auth/patient/verify-otp in 97ms (591 modules)
+ POST /api/auth/patient/verify-otp 200 in 259ms
+ ✓ Compiled /api/bookings in 174ms (593 modules)
+ POST /api/bookings 200 in 2938ms
+ ✓ Compiled in 182ms (259 modules)
+ ✓ Compiled in 245ms (852 modules)
+ ✓ Compiled in 260ms (852 modules)
+ ✓ Compiled in 237ms (852 modules)
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 2031ms
+ POST /api/auth/patient/request-otp 200 in 31ms
+ POST /api/auth/patient/verify-otp 200 in 44ms
+ POST /api/bookings 200 in 2317ms
+ ✓ Compiled in 372ms (852 modules)
+ ✓ Compiled in 275ms (852 modules)
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 2319ms
+ POST /api/auth/patient/request-otp 200 in 24ms
+ POST /api/auth/patient/verify-otp 200 in 42ms
+ POST /api/bookings 200 in 2444ms
+ ✓ Compiled in 129ms (259 modules)
+ ✓ Compiled in 274ms (852 modules)
+ ✓ Compiled /api/debug/patient/[uuid] in 213ms (840 modules)
+ GET /api/debug/patient/a230bd75-82e5-4715-a0db-c75c017b8151 200 in 2331ms
+ ✓ Compiled in 227ms (373 modules)
+ ✓ Compiled /doctors/[id] in 156ms (578 modules)
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 2273ms
+ ✓ Compiled /api/auth/patient/request-otp in 94ms (580 modules)
+ POST /api/auth/patient/request-otp 200 in 176ms
+ ✓ Compiled /api/auth/patient/verify-otp in 101ms (593 modules)
+ POST /api/auth/patient/verify-otp 200 in 257ms
+ ✓ Compiled /api/bookings in 124ms (595 modules)
+[resolvePatientNumericId] a230bfc7-e452-4947-b066-7e898103bef1 → pid: 5 dto keys: [ 'id', 'uuid', 'title', 'language', 'financial' ]
+ POST /api/bookings 200 in 3249ms
+ ✓ Compiled in 270ms (852 modules)
+ GET /doctors/a230bd24-bd45-49ab-829a-ad5cded8cfe4 200 in 2203ms
+ POST /api/auth/patient/request-otp 200 in 28ms
+ POST /api/auth/patient/verify-otp 200 in 38ms
+[resolvePatientNumericId] a230c01b-b986-41ae-8c51-99a5c0e42dc3 → pid: 6 dto keys: [ 'id', 'uuid', 'title', 'language', 'financial' ]
+ POST /api/bookings 200 in 2589ms
+ ✓ Compiled in 337ms (852 modules)
+ ✓ Compiled /api/auth/staff/login in 206ms (596 modules)
+ POST /api/auth/staff/login 200 in 354ms
+ ✓ Compiled / in 426ms (602 modules)
+ GET / 200 in 633ms
+ ✓ Compiled /staff/login in 435ms (866 modules)
+ GET /staff/login 200 in 633ms
+ ✓ Compiled /login in 355ms (877 modules)
+ GET /login 200 in 488ms
+ ✓ Compiled /doctors in 184ms (631 modules)
+ GET /doctors 200 in 1760ms
+ ✓ Compiled /ops in 376ms (935 modules)
+ GET /ops 200 in 2431ms
+ ○ Compiling /ops/calendar ...
+ ✓ Compiled /ops/calendar in 886ms (1055 modules)
+ GET /ops/calendar 200 in 3631ms
+ ✓ Compiled /ops/patients in 349ms (1059 modules)
+ GET /ops/patients 200 in 1884ms
+ ○ Compiling /ops/providers ...
+ ✓ Compiled /ops/providers in 754ms (1063 modules)
+ GET /ops/providers 200 in 2322ms
+ ○ Compiling /ops/services ...
+ ✓ Compiled /ops/services in 734ms (1087 modules)
+ GET /ops/services 200 in 1209ms
+ ✓ Compiled /ops/billing in 452ms (1089 modules)
+ GET /ops/billing 200 in 772ms
+ ○ Compiling /ops/reports ...
+ ✓ Compiled /ops/reports in 640ms (1092 modules)
+ GET /ops/reports 200 in 843ms
+ ✓ Compiled /ops/users in 461ms (1094 modules)
+ GET /ops/users 200 in 689ms
+ ✓ Compiled /ops/settings in 448ms (1096 modules)
+ GET /ops/settings 200 in 657ms
+ ○ Compiling /doctor ...
+ ✓ Compiled /doctor in 772ms (1100 modules)
+ GET /doctor 200 in 3084ms
+ ○ Compiling /doctor/schedule ...
+ ✓ Compiled /doctor/schedule in 755ms (1102 modules)
+ GET /doctor/schedule 200 in 2851ms
+ ○ Compiling /doctor/patients ...
+ ✓ Compiled /doctor/patients in 602ms (1090 modules)
+ GET /doctor/patients 200 in 2069ms
+ ✓ Compiled /doctor/encounters in 478ms (1092 modules)
+ GET /doctor/encounters 200 in 664ms
+ ✓ Compiled /doctor/prescriptions in 499ms (1094 modules)
+ GET /doctor/prescriptions 200 in 692ms
+ ○ Compiling /doctor/labs ...
+ ✓ Compiled /doctor/labs in 521ms (1096 modules)
+ GET /doctor/labs 200 in 731ms
+ ○ Compiling /doctor/imaging ...
+ ✓ Compiled /doctor/imaging in 569ms (1098 modules)
+ GET /doctor/imaging 200 in 765ms
+ ○ Compiling /doctor/followups ...
+ ✓ Compiled /doctor/followups in 542ms (1100 modules)
+ GET /doctor/followups 200 in 737ms
+ ✓ Compiled in 175ms (350 modules)
+ ✓ Compiled in 445ms (350 modules)
+ ✓ Compiled in 505ms (350 modules)
+ ✓ Compiled in 176ms (350 modules)
+ ✓ Compiled in 155ms (350 modules)

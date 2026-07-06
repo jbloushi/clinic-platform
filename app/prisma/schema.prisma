@@ -1,0 +1,123 @@
+// Platform DB — everything OpenEMR doesn't own cleanly:
+// identity (mobile OTP), booking holds, wallet ledger, payments, audit.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("ADAPTER_DATABASE_URL")
+}
+
+/// Staff (reception/doctor/admin/finance). Maps to OpenEMR practitioner UUID for doctors.
+model StaffUser {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           String   // reception | doctor | admin | finance
+  openemrUserId  String?  // for doctor role, maps to OpenEMR users.uuid
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+}
+
+/// Patient login identity (mobile + OTP). Mapped to OpenEMR patient UUID after registration.
+model PatientIdentity {
+  id             String   @id @default(cuid())
+  mobile         String   @unique
+  firstName      String?
+  lastName       String?
+  email          String?
+  openemrPatientUuid String? @unique
+  lastLoginAt    DateTime?
+  createdAt      DateTime @default(now())
+}
+
+/// OTP codes for patient login (mock in demo).
+model OtpCode {
+  id         String   @id @default(cuid())
+  mobile     String
+  code       String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime @default(now())
+  @@index([mobile])
+}
+
+/// Session store (iron-session uses cookies but we log active sessions for audit).
+model SessionLog {
+  id         String   @id @default(cuid())
+  subject    String   // "staff:<id>" | "patient:<id>"
+  event      String   // login | logout | expire
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+}
+
+/// Services catalog — visit types with duration + fee.
+model Service {
+  id              String   @id @default(cuid())
+  name            String
+  durationMinutes Int
+  priceMinor      Int
+  currency        String   @default("USD")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+}
+
+/// Booking hold — temporary slot reservation before payment. On confirm, we create the OpenEMR appointment.
+model BookingHold {
+  id                    String   @id @default(cuid())
+  patientIdentityId     String?
+  practitionerOpenemrId String
+  serviceId             String
+  startAt               DateTime
+  endAt                 DateTime
+  status                String   @default("held") // held | pending_payment | confirmed | cancelled | expired
+  openemrAppointmentId  String?  // populated on confirm
+  reason                String?
+  holdExpiresAt         DateTime
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  @@index([practitionerOpenemrId, startAt])
+}
+
+/// Wallet ledger — append-only. Balance is derived.
+model WalletTransaction {
+  id          String   @id @default(cuid())
+  patientId   String   // PatientIdentity.id
+  amountMinor Int      // + credit, - debit
+  currency    String   @default("USD")
+  source      String   // consultation_credit | promo | admin_adjustment | payment | refund | expiry
+  reference   String?
+  expiresAt   DateTime?
+  createdBy   String   // staff id or "system"
+  createdAt   DateTime @default(now())
+  @@index([patientId])
+}
+
+/// Payment records (mock in demo).
+model Payment {
+  id             String   @id @default(cuid())
+  bookingHoldId  String?
+  patientId      String?
+  amountMinor    Int
+  currency       String   @default("USD")
+  method         String   // card_mock | cash | wallet | transfer
+  status         String   // pending | succeeded | failed | refunded
+  externalRef    String?
+  createdAt      DateTime @default(now())
+}
+
+/// Audit log — every meaningful action.
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String   // "staff:<id>" | "patient:<id>" | "system"
+  action    String   // e.g. "appointment.create", "wallet.adjust"
+  target    String?
+  metadata  String?  // JSON string, no PHI
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}

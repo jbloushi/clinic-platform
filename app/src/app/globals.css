@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Neutral surface — clean medical SaaS */
+    --background: 210 20% 98%;
+    --foreground: 220 25% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 15%;
+
+    /* Soft blue primary → navy on hover */
+    --primary: 217 91% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 210 30% 96%;
+    --secondary-foreground: 220 25% 20%;
+
+    --muted: 210 20% 96%;
+    --muted-foreground: 220 15% 45%;
+
+    --accent: 210 30% 94%;
+    --accent-foreground: 220 25% 15%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 90%;
+    --input: 220 15% 90%;
+    --ring: 217 91% 55%;
+
+    --radius: 0.5rem;
+
+    /* Booking status colors — single source of truth */
+    --status-held: 38 92% 50%;         /* amber */
+    --status-pending: 32 95% 44%;      /* darker amber */
+    --status-confirmed: 217 91% 55%;   /* primary blue */
+    --status-checkedin: 173 80% 40%;   /* teal */
+    --status-completed: 142 71% 45%;   /* green */
+    --status-cancelled: 220 10% 55%;   /* gray */
+    --status-noshow: 0 72% 51%;        /* red */
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground antialiased; }
+  html { font-feature-settings: 'cv02','cv03','cv04','cv11'; }
+}
+
+/* Utility for RTL-ready horizontal spacing (future) */
+@layer utilities {
+  .surface-1 { @apply bg-card border rounded-lg; }
+  .surface-2 { @apply bg-secondary/50 border rounded-md; }
+}
