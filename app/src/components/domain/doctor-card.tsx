@@ -3,7 +3,8 @@ import { ArrowRight, Clock } from 'lucide-react';
 import { InitialsAvatar } from './avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import { specialtyColor } from '@/lib/specialty-colors';
 import type { Practitioner } from '@/lib/data/types';
 
 /**
@@ -19,14 +20,23 @@ export function DoctorCard({
   nextAvailable?: string;
 }) {
   const fullName = `${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim();
+  const color = specialtyColor(doctor.specialty);
   return (
     <Card className="card-hover flex flex-col overflow-hidden">
       <CardContent className="flex flex-1 flex-col pt-6">
         <div className="flex items-start gap-3">
-          <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} size={48} />
+          <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} gradient={color.avatar} size={48} />
           <div className="min-w-0 flex-1">
             <h3 className="truncate text-[15px] font-semibold leading-tight tracking-tight">{fullName}</h3>
-            <p className="mt-0.5 truncate text-sm text-muted-foreground">{doctor.specialty}</p>
+            <span
+              className={cn(
+                'mt-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+                color.pill,
+              )}
+            >
+              <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
+              {doctor.specialty}
+            </span>
           </div>
         </div>
 

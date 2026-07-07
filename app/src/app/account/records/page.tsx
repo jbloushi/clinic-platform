@@ -33,11 +33,11 @@ export default async function MyRecordsPage() {
     <div>
       <PageHeader title="My records" description="A read-only view of your medical history." />
       <Tabs defaultValue="problems" className="mt-6">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="problems">Problems</TabsTrigger>
-          <TabsTrigger value="meds">Medications</TabsTrigger>
+          <TabsTrigger value="meds">Meds</TabsTrigger>
           <TabsTrigger value="allergies">Allergies</TabsTrigger>
-          <TabsTrigger value="documents">Documents</TabsTrigger>
+          <TabsTrigger value="documents">Docs</TabsTrigger>
         </TabsList>
         <TabsContent value="problems">
           <ListCard title="Problems" items={history.problems.map((p) => p.label)} />

@@ -8,7 +8,9 @@ import { EmptyState } from '@/components/domain/states';
 import { prisma } from '@/lib/db';
 import { requirePatient } from '@/lib/auth/guards';
 import { getDataProvider } from '@/lib/data';
-import { formatDateTime } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
+import { InitialsAvatar } from '@/components/domain/avatar';
+import { specialtyColor } from '@/lib/specialty-colors';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,17 +52,38 @@ export default async function MyAppointmentsPage() {
         ) : (
           holds.map((h) => {
             const doc = doctorMap.get(h.practitionerOpenemrId);
+            const color = doc ? specialtyColor(doc.specialty) : null;
             return (
               <Card key={h.id}>
-                <CardContent className="flex flex-wrap items-center gap-4 pt-6">
-                  <div className="w-40 shrink-0">
-                    <p className="text-sm font-semibold">{formatDateTime(h.startAt.toISOString())}</p>
+                <CardContent className="pt-6">
+                  <div className="flex items-start gap-3">
+                    <InitialsAvatar
+                      name={doc ? `${doc.firstName} ${doc.lastName}` : 'Dr'}
+                      gradient={color?.avatar}
+                      size={44}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">
+                        {doc ? `${doc.title} ${doc.firstName} ${doc.lastName}` : 'Doctor'}
+                      </p>
+                      {doc && color && (
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+                            color.pill,
+                          )}
+                        >
+                          <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
+                          {doc.specialty}
+                        </span>
+                      )}
+                    </div>
+                    <StatusBadge status={h.status as any} />
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{doc ? `${doc.title} ${doc.firstName} ${doc.lastName}` : 'Doctor'}</p>
-                    <p className="truncate text-sm text-muted-foreground">{doc?.specialty ?? h.reason ?? 'Consultation'}</p>
+                  <div className="mt-3 flex items-center gap-2 border-t pt-3 text-sm font-medium tabular-nums">
+                    <CalendarPlus className="h-4 w-4 shrink-0 text-primary" />
+                    {formatDateTime(h.startAt.toISOString())}
                   </div>
-                  <StatusBadge status={h.status as any} />
                 </CardContent>
               </Card>
             );

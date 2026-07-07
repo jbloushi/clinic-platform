@@ -7,10 +7,13 @@ import { cn } from '@/lib/utils';
 export function InitialsAvatar({
   name,
   size = 40,
+  gradient,
   className,
 }: {
   name: string;
   size?: number;
+  /** Optional gradient override (e.g. specialty color). Falls back to a name hash. */
+  gradient?: string;
   className?: string;
 }) {
   const letters = name
@@ -29,14 +32,14 @@ export function InitialsAvatar({
     'from-teal-500 to-cyan-700',
     'from-blue-600 to-indigo-700',
   ];
-  const idx = Math.abs(hash(name)) % palette.length;
+  const grad = gradient ?? palette[Math.abs(hash(name)) % palette.length];
 
   return (
     <span
       aria-hidden
       className={cn(
         'inline-flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br text-white',
-        palette[idx],
+        grad,
         className,
       )}
       style={{

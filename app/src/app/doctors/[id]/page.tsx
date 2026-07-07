@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BrandWordmark } from '@/components/domain/brand-mark';
 import { InitialsAvatar } from '@/components/domain/avatar';
 import { getDataProvider } from '@/lib/data';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
+import { specialtyColor } from '@/lib/specialty-colors';
 import { SlotPicker } from './slot-picker';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,7 @@ export default async function DoctorProfilePage({
   const slots = await dp.getAvailableSlots(id, from, to).catch(() => []);
 
   const fullName = `${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim();
+  const color = specialtyColor(doctor.specialty);
 
   return (
     <div className="min-h-screen">
@@ -56,10 +58,18 @@ export default async function DoctorProfilePage({
           <CardContent className="pt-6">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-start gap-4">
-                <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} size={64} />
+                <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} gradient={color.avatar} size={64} />
                 <div>
-                  <h1 className="text-2xl font-semibold tracking-tight">{fullName}</h1>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{doctor.specialty}</p>
+                  <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{fullName}</h1>
+                  <span
+                    className={cn(
+                      'mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+                      color.pill,
+                    )}
+                  >
+                    <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
+                    {doctor.specialty}
+                  </span>
                   <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <li className="inline-flex items-center gap-1.5">
                       <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />
@@ -72,11 +82,11 @@ export default async function DoctorProfilePage({
                   </ul>
                 </div>
               </div>
-              <div className="rounded-lg border bg-secondary/50 p-3 text-right sm:min-w-[160px]">
+              <div className="flex items-center justify-between rounded-lg border bg-secondary/50 p-3 sm:min-w-[160px] sm:flex-col sm:items-end">
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   Consultation fee
                 </p>
-                <p className="mt-1 text-2xl font-semibold tabular-nums">
+                <p className="text-xl font-semibold tabular-nums sm:mt-1 sm:text-2xl">
                   {formatCurrency(doctor.consultationFeeMinor, doctor.currency)}
                 </p>
               </div>

@@ -8,7 +8,8 @@ import { BrandWordmark } from '@/components/domain/brand-mark';
 import { InitialsAvatar } from '@/components/domain/avatar';
 import { getDataProvider } from '@/lib/data';
 import { prisma } from '@/lib/db';
-import { formatDateTime } from '@/lib/utils';
+import { cn, formatDateTime } from '@/lib/utils';
+import { specialtyColor } from '@/lib/specialty-colors';
 import { BookingForm } from './form';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ export default async function BookPage({
   const doctor = await getDataProvider().getPractitionerById(practitionerId);
   if (!doctor) redirect('/doctors');
   const services = await prisma.service.findMany({ where: { active: true } });
+  const color = specialtyColor(doctor.specialty);
 
   return (
     <div className="min-h-screen">
@@ -48,21 +50,29 @@ export default async function BookPage({
           description="A few details and you're set."
         />
 
-        {/* Sticky-ish summary card */}
+        {/* Summary card */}
         <Card>
-          <CardContent className="pt-5">
-            <div className="flex flex-wrap items-center gap-4">
-              <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} size={44} />
+          <CardContent className="space-y-3 pt-5">
+            <div className="flex items-center gap-3">
+              <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} gradient={color.avatar} size={44} />
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold">
+                <p className="truncate text-sm font-semibold">
                   {doctor.title} {doctor.firstName} {doctor.lastName}
                 </p>
-                <p className="text-xs text-muted-foreground">{doctor.specialty}</p>
+                <span
+                  className={cn(
+                    'mt-0.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+                    color.pill,
+                  )}
+                >
+                  <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
+                  {doctor.specialty}
+                </span>
               </div>
-              <div className="rounded-md bg-secondary/60 px-3 py-1.5 text-sm font-medium tabular-nums">
-                <CalendarClock className="mr-1.5 inline-block h-3.5 w-3.5 -translate-y-px text-primary" />
-                {formatDateTime(start!)}
-              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-md bg-secondary/60 px-3 py-2 text-sm font-medium tabular-nums">
+              <CalendarClock className="h-4 w-4 shrink-0 text-primary" />
+              {formatDateTime(start!)}
             </div>
           </CardContent>
         </Card>
