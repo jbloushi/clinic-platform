@@ -29,10 +29,27 @@ const SPECIALTIES = [
 ];
 
 export default async function LandingPage() {
+  const dp = getDataProvider();
   let featured: Practitioner[] = [];
+  const nextAvailable: Record<string, string> = {};
   try {
-    const list = await getDataProvider().getPractitioners({ activeOnly: true });
+    const list = await dp.getPractitioners({ activeOnly: true });
     featured = list.slice(0, 3);
+    const from = new Date().toISOString().slice(0, 10);
+    const toDate = new Date();
+    toDate.setDate(toDate.getDate() + 6);
+    const to = toDate.toISOString().slice(0, 10);
+    await Promise.all(
+      featured.map(async (d) => {
+        try {
+          const slots = await dp.getAvailableSlots(d.id, from, to);
+          const first = slots.find((s) => s.available);
+          if (first) nextAvailable[d.id] = formatWhen(first.start);
+        } catch {
+          /* silent */
+        }
+      }),
+    );
   } catch {
     /* silent on landing */
   }
@@ -174,7 +191,7 @@ export default async function LandingPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {featured.map((d) => (
-                <DoctorCard key={d.id} doctor={d} />
+                <DoctorCard key={d.id} doctor={d} nextAvailable={nextAvailable[d.id]} />
               ))}
             </div>
           </div>
@@ -265,6 +282,18 @@ export default async function LandingPage() {
       </footer>
     </div>
   );
+}
+
+function formatWhen(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const isSame = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (isSame(d, today)) return `Today at ${time}`;
+  if (isSame(d, tomorrow)) return `Tomorrow at ${time}`;
+  return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`;
 }
 
 function HeroVisual() {

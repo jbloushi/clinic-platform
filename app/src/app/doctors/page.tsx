@@ -85,7 +85,7 @@ function formatWhen(iso: string): string {
   tomorrow.setDate(today.getDate() + 1);
   const isSame = (a: Date, b: Date) => a.toDateString() === b.toDateString();
   const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (isSame(d, today)) return `today at ${time}`;
-  if (isSame(d, tomorrow)) return `tomorrow at ${time}`;
+  if (isSame(d, today)) return `Today at ${time}`;
+  if (isSame(d, tomorrow)) return `Tomorrow at ${time}`;
   return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`;
 }

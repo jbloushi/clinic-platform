@@ -76,6 +76,7 @@ export interface OpenEMRPractitionerDto {
   facility?: string;
   physician_type?: string;
   email?: string;
+  info?: string; // OpenEMR `users.info` — we use it to store the practitioner bio
   active?: boolean | number | string;
 }
 
@@ -89,6 +90,7 @@ export function toPractitioner(dto: OpenEMRPractitionerDto): Practitioner {
     lastName: dto.lname ?? '',
     title: dto.title || 'Dr.',
     specialty: dto.specialty || 'General Practice',
+    bio: dto.info || undefined,
     consultationFeeMinor: 15000,
     currency: 'USD',
     active,
