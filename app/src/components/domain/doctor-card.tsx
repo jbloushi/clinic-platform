@@ -27,7 +27,7 @@ export function DoctorCard({
   const chips = [doctorVisitMode(doctor.id), 'Accepts insurance', doctorLanguages(doctor.id)];
 
   return (
-    <Card className="card-hover flex flex-col overflow-hidden rounded-2xl">
+    <Card className="card-hover flex flex-col overflow-hidden">
       <CardContent className="flex flex-1 flex-col gap-4 p-5">
         {/* Header: avatar + name + specialty + rating */}
         <div className="flex items-start gap-3">
@@ -96,7 +96,7 @@ export function DoctorCard({
               {formatCurrency(doctor.consultationFeeMinor, doctor.currency)}
             </p>
           </div>
-          <Button asChild className="group/btn rounded-xl">
+          <Button asChild className="group/btn">
             <Link href={`/doctors/${doctor.id}`}>
               Book <ArrowRight className="transition-transform group-hover/btn:translate-x-0.5" />
             </Link>
