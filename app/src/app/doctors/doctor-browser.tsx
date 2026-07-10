@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/domain/states';
 import { DoctorCard } from '@/components/domain/doctor-card';
 import { cn } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
+import type { NextAvailable } from '@/lib/doctor-meta';
 import type { Practitioner } from '@/lib/data/types';
 
 /**
@@ -21,7 +22,7 @@ export function DoctorBrowser({
   nextAvailable,
 }: {
   doctors: Practitioner[];
-  nextAvailable: Record<string, string>;
+  nextAvailable: Record<string, NextAvailable>;
 }) {
   const [q, setQ] = useState('');
   const [specialty, setSpecialty] = useState('');

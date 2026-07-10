@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BrandWordmark } from '@/components/domain/brand-mark';
 import { getDataProvider } from '@/lib/data';
+import { formatNextAvailable } from '@/lib/doctor-meta';
+import type { NextAvailable } from '@/lib/doctor-meta';
 import type { Practitioner } from '@/lib/data/types';
 import { DoctorCard } from '@/components/domain/doctor-card';
 
@@ -31,7 +33,7 @@ const SPECIALTIES = [
 export default async function LandingPage() {
   const dp = getDataProvider();
   let featured: Practitioner[] = [];
-  const nextAvailable: Record<string, string> = {};
+  const nextAvailable: Record<string, NextAvailable> = {};
   try {
     const list = await dp.getPractitioners({ activeOnly: true });
     featured = list.slice(0, 3);
@@ -44,7 +46,7 @@ export default async function LandingPage() {
         try {
           const slots = await dp.getAvailableSlots(d.id, from, to);
           const first = slots.find((s) => s.available);
-          if (first) nextAvailable[d.id] = formatWhen(first.start);
+          if (first) nextAvailable[d.id] = { iso: first.start, label: formatNextAvailable(first.start) };
         } catch {
           /* silent */
         }
@@ -282,18 +284,6 @@ export default async function LandingPage() {
       </footer>
     </div>
   );
-}
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-  const isSame = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  if (isSame(d, today)) return `Today at ${time}`;
-  if (isSame(d, tomorrow)) return `Tomorrow at ${time}`;
-  return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`;
 }
 
 function HeroVisual() {

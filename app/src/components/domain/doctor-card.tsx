@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { cn, formatCurrency } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
 import { availabilityTone, doctorLanguages, doctorRating, doctorVisitMode } from '@/lib/doctor-meta';
+import type { NextAvailable } from '@/lib/doctor-meta';
 import type { Practitioner } from '@/lib/data/types';
 
 /**
@@ -19,11 +20,12 @@ export function DoctorCard({
   nextAvailable,
 }: {
   doctor: Practitioner;
-  nextAvailable?: string;
+  nextAvailable?: NextAvailable;
 }) {
   const fullName = `${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim();
   const color = specialtyColor(doctor.specialty);
   const tone = availabilityTone(nextAvailable);
+  const nextAvailableLabel = nextAvailable?.label;
   const chips = [doctorVisitMode(doctor.id), 'Accepts insurance', doctorLanguages(doctor.id)];
 
   return (
@@ -79,11 +81,11 @@ export function DoctorCard({
         </div>
 
         {/* Next available */}
-        {nextAvailable && (
+        {nextAvailableLabel && (
           <div className="flex items-center gap-2 rounded-lg bg-secondary/60 px-3 py-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4 shrink-0 text-primary" aria-hidden />
             <span>
-              Next available <span className="font-semibold text-foreground">{nextAvailable}</span>
+              Next available <span className="font-semibold text-foreground">{nextAvailableLabel}</span>
             </span>
           </div>
         )}

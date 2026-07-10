@@ -8,6 +8,9 @@
  * ratings / provider-profile source exists.
  */
 
+/** Next-available slot as passed to DoctorCard: raw ISO (drives tone logic) + a formatted label. */
+export type NextAvailable = { iso: string; label: string };
+
 function hash(seed: string, mult: number): number {
   let n = 0;
   for (let i = 0; i < seed.length; i++) n = (n * mult + seed.charCodeAt(i)) | 0;
@@ -32,10 +35,25 @@ export function doctorVisitMode(id: string): 'Video visit' | 'In-person' {
 }
 
 /**
- * Availability signal for the avatar status dot, from the (real) next-available
- * hint: green when there's a slot today, amber when later, slate when none.
+ * Availability signal for the avatar status dot, computed from the real next-
+ * available slot's ISO start (not the formatted label — labels are display
+ * text and shouldn't drive logic): green when the slot is today, amber when
+ * later, slate when there's no upcoming slot.
  */
-export function availabilityTone(nextAvailable?: string): 'today' | 'soon' | 'none' {
+export function availabilityTone(nextAvailable?: NextAvailable): 'today' | 'soon' | 'none' {
   if (!nextAvailable) return 'none';
-  return /today/i.test(nextAvailable) ? 'today' : 'soon';
+  return new Date(nextAvailable.iso).toDateString() === new Date().toDateString() ? 'today' : 'soon';
+}
+
+/** Human label for a slot's ISO start: "Today at 9:00 AM" / "Tomorrow at …" / "Mon, Jul 14 · …". */
+export function formatNextAvailable(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const isSame = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  const time = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  if (isSame(d, today)) return `Today at ${time}`;
+  if (isSame(d, tomorrow)) return `Tomorrow at ${time}`;
+  return `${d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${time}`;
 }
