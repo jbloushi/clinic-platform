@@ -68,7 +68,7 @@ Mechanical. Read `app/DESIGN.md` §Spacing & shape first.
 
 ---
 
-## Phase C — apply open /code-review findings  ▶ SONNET 5
+## Phase C — apply open /code-review findings  ▶ SONNET 5 — ✅ DONE (commit `960b764`)
 
 Three findings from the `f5e4f77` review, with exact instructions so no judgment is needed:
 
