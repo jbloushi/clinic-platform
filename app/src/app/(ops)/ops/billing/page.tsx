@@ -17,12 +17,12 @@ export default async function BillingPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Billing &amp; payments" description="Payments recorded in the platform. OpenEMR billing sync is planned for Phase 3." />
+      <PageHeader title="Billing & payments" description="Payments recorded in the platform. OpenEMR billing sync is planned for Phase 3." />
 
       <Card>
         <CardContent className="pt-6">
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Total collected</p>
-          <p className="text-2xl font-semibold">{formatCurrency(total)}</p>
+          <p className="text-2xl font-semibold tabular-nums">{formatCurrency(total)}</p>
         </CardContent>
       </Card>
 

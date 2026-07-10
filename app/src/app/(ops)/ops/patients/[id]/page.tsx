@@ -96,7 +96,7 @@ export default async function PatientProfilePage({ params }: { params: Promise<{
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-medium text-muted-foreground">Balance</CardTitle>
-              <p className="text-3xl font-semibold">{formatCurrency(walletBalance)}</p>
+              <p className="text-3xl font-semibold tabular-nums">{formatCurrency(walletBalance)}</p>
             </CardHeader>
             <CardContent>
               {walletTx.length === 0 ? (

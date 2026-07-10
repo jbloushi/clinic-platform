@@ -11,7 +11,7 @@ export default async function UsersPage() {
   const users = await prisma.staffUser.findMany({ orderBy: { createdAt: 'asc' } });
   return (
     <div className="space-y-6">
-      <PageHeader title="Users &amp; roles" description="Staff accounts. Adding new staff via UI is planned for Phase 3." />
+      <PageHeader title="Users & roles" description="Staff accounts. Adding new staff via UI is planned for Phase 3." />
       <Card>
         <Table>
           <TableHeader>
