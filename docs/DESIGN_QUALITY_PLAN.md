@@ -92,7 +92,7 @@ colors (green only for today-slots); `/code-review` low clean; commit.
 
 ---
 
-## Phase D — typeset + layout, product mode  ▶ SONNET 5
+## Phase D — typeset + layout, product mode  ▶ SONNET 5 — ✅ DONE (commit `e5a651b`)
 
 Read `app/DESIGN.md` + `app/PRODUCT.md` first. Product register: clarity/density, zero decoration.
 One pass over `/ops/*` and `/doctor/*` checking ONLY these (do not restyle):
