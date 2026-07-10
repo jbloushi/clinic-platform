@@ -19,24 +19,28 @@ a hard acceptance check. Work top-to-bottom; do not skip Phase 0.
 ## Model-switch protocol
 
 When a phase says "SWITCH", tell the user in chat: *"Switch to <model> now (/model <id>)"* and
-**pause** until they confirm. Rationale: mechanical/config/verification work runs fine on Haiku;
-data-layer refactors need Sonnet; only the one architecture decision needs Opus.
+**pause** until they confirm.
+
+**Floor is Sonnet 5, not Haiku.** Haiku's context window is too limited for this codebase —
+confirmed in the companion DESIGN_QUALITY_PLAN Phase B, where Browser-pane tool output alone started
+degrading under it. Run every phase on Sonnet 5 unless it's the one architecture decision (3b),
+which also involves the user directly and benefits from Opus.
 
 | Phase | Work | Model | /model id |
 |---|---|---|---|
-| 0 | Run in production mode | **Haiku 4.5** | `claude-haiku-4-5-20251001` |
+| 0 | Run in production mode | Sonnet 5 | ✅ DONE — commit `48d3e81` |
 | 1 | Cache OpenEMR reads + ISR | **Sonnet 5** | `claude-sonnet-5` |
 | 2 | Kill the N+1 slot fan-out | **Sonnet 5** | `claude-sonnet-5` |
 | 3a | SQLite WAL (quick concurrency win) | **Sonnet 5** | `claude-sonnet-5` |
 | 3b | DECISION: stay SQLite vs move to Postgres | **Opus 4.8** (+ user) | `claude-opus-4-8` |
-| 4 | Measure loading + concurrent-login test | **Haiku 4.5** | `claude-haiku-4-5-20251001` |
+| 4 | Measure loading + concurrent-login test | **Sonnet 5** | `claude-sonnet-5` |
 
 Start of every phase: the executing agent restates "Running Phase N on <model>". If the current
 model doesn't match the table, STOP and ask the user to switch first.
 
 ---
 
-## Phase 0 — Run in production mode  ▶ SWITCH TO HAIKU 4.5 — ✅ DONE
+## Phase 0 — Run in production mode  ✅ DONE (ran on Sonnet 5)
 
 Highest impact, lowest risk. `next dev` is the main perceived-slowness source.
 
@@ -148,7 +152,7 @@ migrate schema, repoint `ADAPTER_DATABASE_URL`, retest booking/OTP/wallet).
 
 ---
 
-## Phase 4 — Measure & verify  ▶ SWITCH TO HAIKU 4.5
+## Phase 4 — Measure & verify  ▶ SONNET 5
 
 - **4.1** Loading: with `npm run prod` running, time cold + warm loads of `/`, `/doctors`,
   `/doctors/[id]` (curl `-w "%{time_total}"`). Record before/after in this file.

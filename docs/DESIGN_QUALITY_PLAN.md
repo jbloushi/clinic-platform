@@ -22,14 +22,19 @@ starting one in the other file). Goal: raise UI quality using **named design lev
 Same as PERFORMANCE_PLAN: at each phase boundary the agent says *"Switch to <model> now
 (/model <id>)"* and pauses. If the current model already matches, proceed without asking.
 
+**Floor is Sonnet 5, not Haiku.** Haiku's context window is too limited for this codebase (the
+Browser-pane tool calls, file reads, and multi-file diffs in a phase eat the window fast — Phase B
+already showed the screenshot tool degrading under it). Haiku is fine for truly trivial one-shot
+greps/curls done as a sub-step, but every phase below runs on Sonnet 5 as the baseline.
+
 | Phase | Lever(s) | Surface | Model | /model id |
 |---|---|---|---|---|
-| A | detect + system docs | whole app | **Fable/Opus** | — ✅ DONE (this session) |
-| B | detect-fixes | DoctorCard radius | **Haiku 4.5** | `claude-haiku-4-5-20251001` |
-| C | code-review debt | 3 open findings | **Haiku 4.5** | `claude-haiku-4-5-20251001` |
+| A | detect + system docs | whole app | **Fable/Opus** | — ✅ DONE |
+| B | detect-fixes | DoctorCard radius | Sonnet 5 (ran on Haiku) | ✅ DONE — commit `3492af7` |
+| C | code-review debt | 3 open findings | **Sonnet 5** | `claude-sonnet-5` |
 | D | typeset + layout | product mode (ops/doctor) | **Sonnet 5** | `claude-sonnet-5` |
 | E | polish + delight | brand mode (landing/booking) | **Sonnet 5** | `claude-sonnet-5` |
-| F | verify + review gate | whole app | **Haiku 4.5** | `claude-haiku-4-5-20251001` |
+| F | verify + review gate | whole app | **Sonnet 5** | `claude-sonnet-5` |
 
 Every phase ends: `npx tsc --noEmit` clean → `/code-review` low → commit. Keep phases
 independently revertable.
@@ -48,7 +53,7 @@ Deliverables: `app/DESIGN.md`, `app/PRODUCT.md`, this plan.
 
 ---
 
-## Phase B — detect-fixes (radius consistency)  ▶ HAIKU 4.5
+## Phase B — detect-fixes (radius consistency)  ▶ SONNET 5 — ✅ DONE
 
 Mechanical. Read `app/DESIGN.md` §Spacing & shape first.
 
@@ -63,7 +68,7 @@ Mechanical. Read `app/DESIGN.md` §Spacing & shape first.
 
 ---
 
-## Phase C — apply open /code-review findings  ▶ HAIKU 4.5
+## Phase C — apply open /code-review findings  ▶ SONNET 5
 
 Three findings from the `f5e4f77` review, with exact instructions so no judgment is needed:
 
@@ -121,7 +126,7 @@ preview or assert the CSS media query wraps the animation); `tsc`; `/code-review
 
 ---
 
-## Phase F — final gate  ▶ HAIKU 4.5
+## Phase F — final gate  ▶ SONNET 5
 
 - **F.1** Full-route smoke: curl every route (list in PERFORMANCE_PLAN Phase 4.1) → all 200.
 - **F.2** `/code-review` low on the combined B–E diff (`git diff <phase-A-commit>...HEAD`).
@@ -137,9 +142,11 @@ preview or assert the CSS media query wraps the animation); `tsc`; `/code-review
 2. One lever × one surface per request. Name the lever in the prompt ("typeset the ops tables"),
    never "make it better".
 3. `/code-review` low by default; medium only on data-layer or auth changes; ultra never for UI.
-4. Haiku for: grep audits, radius/token conformance, screenshots, curls, commits.
-   Sonnet for: anything requiring visual judgment or multi-file refactors.
-   Opus/Fable for: changing DESIGN.md itself, new design systems, plan revisions.
+4. **Sonnet 5 is the floor for this codebase** — Haiku's context window is too limited (multi-file
+   diffs, DESIGN.md/PRODUCT.md, and Browser-pane tool output together exceed it; the screenshot tool
+   was already visibly degrading under Haiku in Phase B). Run all phases, including grep audits and
+   commits, on Sonnet 5. Reserve Opus/Fable for: changing DESIGN.md itself, new design systems, plan
+   revisions — never drop below Sonnet.
 5. No subagents for UI work — run inline.
 6. Screenshot verification: one viewport per register (375px brand, 1280px product) unless the
    change is specifically responsive.
