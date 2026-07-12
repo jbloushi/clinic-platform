@@ -17,18 +17,18 @@ export default async function ProvidersPage() {
   try {
     practitioners = await getDataProvider().getPractitioners({ activeOnly: false });
   } catch (e: any) {
-    error = e?.message ?? 'Failed to load providers from OpenEMR';
+    error = e?.message ?? 'Failed to load specialists from OpenEMR';
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Providers"
-        description="Doctors and practitioners in OpenEMR. Create new ones here — everything is written to the EMR."
+        title="Specialists"
+        description="Specialists in OpenEMR — doctors, nurses, technicians. Create new ones here; everything is written to the EMR."
         actions={
           <Button asChild>
             <Link href="/ops/providers/new">
-              <Plus className="h-4 w-4" /> Add provider
+              <Plus className="h-4 w-4" /> Add specialist
             </Link>
           </Button>
         }
@@ -45,12 +45,12 @@ export default async function ProvidersPage() {
           <CardContent className="p-0">
             <EmptyState
               icon={<Stethoscope className="h-5 w-5" />}
-              title="No providers yet"
-              description="Add your first doctor to make booking possible."
+              title="No specialists yet"
+              description="Add your first specialist to make booking possible."
               action={
                 <Button asChild>
                   <Link href="/ops/providers/new">
-                    <Plus className="h-4 w-4" /> Add provider
+                    <Plus className="h-4 w-4" /> Add specialist
                   </Link>
                 </Button>
               }

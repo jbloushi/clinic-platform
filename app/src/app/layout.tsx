@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     template: '%s · Clinic Platform',
   },
   description:
-    'Modern clinic operating platform — book doctors, run operations, and provide care, powered by OpenEMR.',
+    'Modern clinic operating platform — book specialists, run operations, and provide care, powered by OpenEMR.',
   icons: {
     icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
   },

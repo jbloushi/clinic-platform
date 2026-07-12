@@ -5,41 +5,41 @@ import { Search, Stethoscope, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { EmptyState } from '@/components/domain/states';
-import { DoctorCard } from '@/components/domain/doctor-card';
+import { SpecialistCard } from '@/components/domain/specialist-card';
 import { cn } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
-import type { NextAvailable } from '@/lib/doctor-meta';
+import type { NextAvailable } from '@/lib/specialist-meta';
 import type { Practitioner } from '@/lib/data/types';
 
 /**
- * Client-side live filtering for the public doctor listing. The server hands us
+ * Client-side live filtering for the public specialist listing. The server hands us
  * the full active list once; we filter in-memory as the user types or taps a
  * specialty — no Search button, no round-trips. Mobile-first: full-width search,
  * horizontally-wrapping color-coded specialty chips.
  */
-export function DoctorBrowser({
-  doctors,
+export function SpecialistBrowser({
+  specialists,
   nextAvailable,
 }: {
-  doctors: Practitioner[];
+  specialists: Practitioner[];
   nextAvailable: Record<string, NextAvailable>;
 }) {
   const [q, setQ] = useState('');
   const [specialty, setSpecialty] = useState('');
 
   const specialties = useMemo(
-    () => Array.from(new Set(doctors.map((d) => d.specialty))).sort(),
-    [doctors],
+    () => Array.from(new Set(specialists.map((s) => s.specialty))).sort(),
+    [specialists],
   );
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return doctors.filter((d) => {
-      if (specialty && d.specialty !== specialty) return false;
+    return specialists.filter((sp) => {
+      if (specialty && sp.specialty !== specialty) return false;
       if (!s) return true;
-      return `${d.title} ${d.firstName} ${d.lastName} ${d.specialty}`.toLowerCase().includes(s);
+      return `${sp.title} ${sp.firstName} ${sp.lastName} ${sp.specialty}`.toLowerCase().includes(s);
     });
-  }, [doctors, q, specialty]);
+  }, [specialists, q, specialty]);
 
   const active = q.trim() !== '' || specialty !== '';
 
@@ -53,7 +53,7 @@ export function DoctorBrowser({
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search by name or specialty…"
           className="h-11 w-full pl-9 pr-9 text-base"
-          aria-label="Search doctors"
+          aria-label="Search specialists"
           type="search"
           inputMode="search"
         />
@@ -97,7 +97,7 @@ export function DoctorBrowser({
       <div className="flex items-center justify-between gap-2 text-sm">
         <p className="text-muted-foreground">
           Showing <span className="font-medium text-foreground">{filtered.length}</span>{' '}
-          {filtered.length === 1 ? 'doctor' : 'doctors'}
+          {filtered.length === 1 ? 'specialist' : 'specialists'}
           {specialty ? ` in ${specialty}` : ''}
         </p>
         {active && (
@@ -120,15 +120,15 @@ export function DoctorBrowser({
           <CardContent className="p-0">
             <EmptyState
               icon={<Stethoscope className="h-5 w-5" />}
-              title="No matching doctors"
+              title="No matching specialists"
               description="Try a different name or specialty."
             />
           </CardContent>
         </Card>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((d) => (
-            <DoctorCard key={d.id} doctor={d} nextAvailable={nextAvailable[d.id]} />
+          {filtered.map((s) => (
+            <SpecialistCard key={s.id} specialist={s} nextAvailable={nextAvailable[s.id]} />
           ))}
         </div>
       )}

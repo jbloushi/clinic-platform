@@ -45,7 +45,7 @@ export function NewProviderForm() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? 'Could not create provider');
+        setError(data.error ?? 'Could not create specialist');
         return;
       }
       router.push('/ops/providers');
@@ -95,7 +95,7 @@ export function NewProviderForm() {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" disabled={saving}>
-          {saving ? 'Creating…' : 'Create provider'}
+          {saving ? 'Creating…' : 'Create specialist'}
         </Button>
         <Button type="button" variant="outline" onClick={() => router.back()}>
           Cancel

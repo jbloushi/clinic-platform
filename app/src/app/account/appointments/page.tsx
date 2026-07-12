@@ -45,7 +45,7 @@ export default async function MyAppointmentsPage() {
               <EmptyState
                 title="No upcoming appointments"
                 description="Book your first visit."
-                action={<Button asChild><Link href="/doctors">Find a doctor</Link></Button>}
+                action={<Button asChild><Link href="/doctors">Find a specialist</Link></Button>}
               />
             </CardContent>
           </Card>
@@ -64,7 +64,7 @@ export default async function MyAppointmentsPage() {
                     />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium">
-                        {doc ? `${doc.title} ${doc.firstName} ${doc.lastName}` : 'Doctor'}
+                        {doc ? `${doc.title} ${doc.firstName} ${doc.lastName}` : 'Specialist'}
                       </p>
                       {doc && color && (
                         <span

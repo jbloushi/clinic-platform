@@ -42,7 +42,7 @@ const NAV: Record<Variant, NavGroup[]> = {
       label: 'Clinical',
       items: [
         { href: '/ops/patients', label: 'Patients', icon: Users },
-        { href: '/ops/providers', label: 'Providers', icon: Stethoscope },
+        { href: '/ops/providers', label: 'Specialists', icon: Stethoscope },
         { href: '/ops/services', label: 'Services', icon: ClipboardList },
       ],
     },
@@ -84,7 +84,7 @@ const NAV: Record<Variant, NavGroup[]> = {
     {
       items: [
         { href: '/', label: 'Home', icon: Home },
-        { href: '/doctors', label: 'Find a doctor', icon: Stethoscope },
+        { href: '/doctors', label: 'Find a specialist', icon: Stethoscope },
       ],
     },
     {
@@ -100,7 +100,7 @@ const NAV: Record<Variant, NavGroup[]> = {
 
 const PORTAL_LABEL: Record<Variant, string> = {
   ops: 'Clinic Operations',
-  doctor: 'Doctor Portal',
+  doctor: 'Specialist Portal',
   patient: 'My Clinic',
 };
 

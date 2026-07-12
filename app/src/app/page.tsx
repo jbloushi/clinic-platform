@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { BrandWordmark } from '@/components/domain/brand-mark';
 import { getDataProvider } from '@/lib/data';
-import { formatNextAvailable } from '@/lib/doctor-meta';
-import type { NextAvailable } from '@/lib/doctor-meta';
+import { formatNextAvailable } from '@/lib/specialist-meta';
+import type { NextAvailable } from '@/lib/specialist-meta';
 import type { Practitioner } from '@/lib/data/types';
-import { DoctorCard } from '@/components/domain/doctor-card';
+import { SpecialistCard } from '@/components/domain/specialist-card';
 import { specialtyColor } from '@/lib/specialty-colors';
 
 export const dynamic = 'force-dynamic';
@@ -67,7 +67,7 @@ export default async function LandingPage() {
           </Link>
           <nav className="hidden items-center gap-1 md:flex">
             <Button asChild variant="ghost" size="sm">
-              <Link href="/doctors">Find a doctor</Link>
+              <Link href="/doctors">Find a specialist</Link>
             </Button>
             <Button asChild variant="ghost" size="sm">
               <Link href="#how">How it works</Link>
@@ -102,13 +102,13 @@ export default async function LandingPage() {
                 booked in <span className="text-primary">under a minute.</span>
               </h1>
               <p className="mt-5 max-w-lg text-[15px] leading-relaxed text-muted-foreground sm:text-base">
-                Browse our doctors, pick a time that fits your day, and confirm online. Your medical record
+                Browse our specialists, pick a time that fits your day, and confirm online. Your medical record
                 stays in one place, secured by our OpenEMR-backed platform.
               </p>
               <div className="mt-7 flex flex-wrap gap-3">
                 <Button asChild size="lg" className="group">
                   <Link href="/doctors">
-                    Find a doctor{' '}
+                    Find a specialist{' '}
                     <ArrowRight className="transition-transform group-hover:translate-x-0.5" />
                   </Link>
                 </Button>
@@ -177,13 +177,13 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Featured doctors */}
+      {/* Featured specialists */}
       {featured.length > 0 && (
         <section className="py-16">
           <div className="mx-auto max-w-6xl px-4">
             <div className="mb-8 flex items-end justify-between gap-3">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Doctors</p>
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">Specialists</p>
                 <h2 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Meet our team</h2>
               </div>
               <Button asChild variant="ghost">
@@ -194,7 +194,7 @@ export default async function LandingPage() {
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {featured.map((d) => (
-                <DoctorCard key={d.id} doctor={d} nextAvailable={nextAvailable[d.id]} />
+                <SpecialistCard key={d.id} specialist={d} nextAvailable={nextAvailable[d.id]} />
               ))}
             </div>
           </div>
@@ -212,7 +212,7 @@ export default async function LandingPage() {
               {
                 n: '1',
                 icon: Search,
-                title: 'Find a doctor',
+                title: 'Find a specialist',
                 body: 'Filter by specialty and see who has availability this week.',
               },
               {

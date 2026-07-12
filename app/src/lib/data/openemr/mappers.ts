@@ -90,6 +90,7 @@ export function toPractitioner(dto: OpenEMRPractitionerDto): Practitioner {
     lastName: dto.lname ?? '',
     title: dto.title || 'Dr.',
     specialty: dto.specialty || 'General Practice',
+    role: dto.physician_type || undefined,
     bio: dto.info || undefined,
     consultationFeeMinor: 15000,
     currency: 'USD',

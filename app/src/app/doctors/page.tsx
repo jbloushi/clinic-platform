@@ -5,24 +5,24 @@ import { PageHeader } from '@/components/domain/page-header';
 import { ErrorState } from '@/components/domain/states';
 import { BrandWordmark } from '@/components/domain/brand-mark';
 import { getDataProvider } from '@/lib/data';
-import { formatNextAvailable } from '@/lib/doctor-meta';
-import type { NextAvailable } from '@/lib/doctor-meta';
+import { formatNextAvailable } from '@/lib/specialist-meta';
+import type { NextAvailable } from '@/lib/specialist-meta';
 import type { Practitioner } from '@/lib/data/types';
-import { DoctorBrowser } from './doctor-browser';
+import { SpecialistBrowser } from './specialist-browser';
 
 export const dynamic = 'force-dynamic';
 
 export default async function FindDoctorPage() {
   const dp = getDataProvider();
-  let doctors: Practitioner[] = [];
+  let specialists: Practitioner[] = [];
   let error: string | null = null;
   try {
-    doctors = await dp.getPractitioners({ activeOnly: true });
+    specialists = await dp.getPractitioners({ activeOnly: true });
   } catch (e: any) {
-    error = e?.message ?? 'Could not load doctors';
+    error = e?.message ?? 'Could not load specialists';
   }
 
-  // Compute a "next available" hint per doctor (best-effort). Passed to the
+  // Compute a "next available" hint per specialist (best-effort). Passed to the
   // client browser as a plain object so filtering stays purely client-side.
   const from = new Date().toISOString().slice(0, 10);
   const toDate = new Date();
@@ -30,11 +30,11 @@ export default async function FindDoctorPage() {
   const to = toDate.toISOString().slice(0, 10);
   const nextAvailable: Record<string, NextAvailable> = {};
   await Promise.all(
-    doctors.map(async (d) => {
+    specialists.map(async (s) => {
       try {
-        const slots = await dp.getAvailableSlots(d.id, from, to);
-        const first = slots.find((s) => s.available);
-        if (first) nextAvailable[d.id] = { iso: first.start, label: formatNextAvailable(first.start) };
+        const slots = await dp.getAvailableSlots(s.id, from, to);
+        const first = slots.find((sl) => sl.available);
+        if (first) nextAvailable[s.id] = { iso: first.start, label: formatNextAvailable(first.start) };
       } catch {
         /* silent */
       }
@@ -62,8 +62,8 @@ export default async function FindDoctorPage() {
       <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:py-10">
         <PageHeader
           eyebrow="Book online"
-          title="Find a doctor"
-          description="Choose a doctor, pick a time that suits you, and confirm in minutes."
+          title="Find a specialist"
+          description="Choose a specialist, pick a time that suits you, and confirm in minutes."
         />
 
         {error ? (
@@ -73,7 +73,7 @@ export default async function FindDoctorPage() {
             </CardContent>
           </Card>
         ) : (
-          <DoctorBrowser doctors={doctors} nextAvailable={nextAvailable} />
+          <SpecialistBrowser specialists={specialists} nextAvailable={nextAvailable} />
         )}
       </main>
     </div>

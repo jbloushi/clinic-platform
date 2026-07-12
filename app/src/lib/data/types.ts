@@ -45,6 +45,7 @@ export interface Practitioner {
   lastName: string;
   title: string;                    // "Dr."
   specialty: string;
+  role?: string;                    // raw physician_type from OpenEMR (doctor / nurse / …); format for display via formatSpecialistRole
   bio?: string;
   photoUrl?: string;
   consultationFeeMinor: number;

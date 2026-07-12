@@ -6,7 +6,7 @@ export default function NewProviderPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Add provider"
+        title="Add specialist"
         description="Creates a practitioner record in OpenEMR. Availability is configured after creation."
       />
       <Card>

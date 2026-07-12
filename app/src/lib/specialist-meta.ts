@@ -1,5 +1,5 @@
 /**
- * Demo-only derived doctor attributes.
+ * Demo-only derived specialist attributes.
  *
  * The card design shows a rating, spoken languages and a visit mode, none of
  * which exist in OpenEMR's user record. Rather than invent random values on
@@ -8,7 +8,7 @@
  * ratings / provider-profile source exists.
  */
 
-/** Next-available slot as passed to DoctorCard: raw ISO (drives tone logic) + a formatted label. */
+/** Next-available slot as passed to SpecialistCard: raw ISO (drives tone logic) + a formatted label. */
 export type NextAvailable = { iso: string; label: string };
 
 function hash(seed: string, mult: number): number {
@@ -18,20 +18,35 @@ function hash(seed: string, mult: number): number {
 }
 
 /** Stable 4.5–4.9 rating. */
-export function doctorRating(id: string): string {
+export function specialistRating(id: string): string {
   return (4.5 + (hash(id, 31) % 5) / 10).toFixed(1);
 }
 
 const SECOND_LANGUAGES = ['Arabic', 'Urdu', 'French', 'Hindi', 'Spanish', 'Turkish'];
 
 /** "English · <second language>". */
-export function doctorLanguages(id: string): string {
+export function specialistLanguages(id: string): string {
   return `English · ${SECOND_LANGUAGES[hash(id, 17) % SECOND_LANGUAGES.length]}`;
 }
 
-/** Whether the doctor offers video visits (else in-person only). */
-export function doctorVisitMode(id: string): 'Video visit' | 'In-person' {
+/** Whether the specialist offers video visits (else in-person only). */
+export function specialistVisitMode(id: string): 'Video visit' | 'In-person' {
   return hash(id, 13) % 3 === 0 ? 'In-person' : 'Video visit';
+}
+
+/**
+ * Normalize OpenEMR's free-form `physician_type` value into a user-facing role
+ * label. The seed uses "doctor"; production data may have "nurse", "technician",
+ * "other_licensed", etc. Returns null when there's no signal (don't render).
+ */
+export function formatSpecialistRole(physicianType?: string | null): string | null {
+  if (!physicianType) return null;
+  const t = physicianType.trim().toLowerCase();
+  if (!t) return null;
+  if (t === 'doctor' || t === 'physician' || t === 'md') return 'Doctor';
+  if (t === 'nurse' || t.startsWith('rn') || t === 'lpn') return 'Nurse';
+  if (t.includes('tech')) return 'Technician';
+  return 'Other';
 }
 
 /**

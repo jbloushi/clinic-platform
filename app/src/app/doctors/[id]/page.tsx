@@ -8,6 +8,7 @@ import { InitialsAvatar } from '@/components/domain/avatar';
 import { getDataProvider } from '@/lib/data';
 import { cn, formatCurrency } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
+import { formatSpecialistRole } from '@/lib/specialist-meta';
 import { SlotPicker } from './slot-picker';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,7 @@ export default async function DoctorProfilePage({
 
   const fullName = `${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim();
   const color = specialtyColor(doctor.specialty);
+  const roleLabel = formatSpecialistRole(doctor.role);
 
   return (
     <div className="min-h-screen">
@@ -50,7 +52,7 @@ export default async function DoctorProfilePage({
       <main className="mx-auto max-w-4xl space-y-8 px-4 py-8">
         <Button variant="ghost" size="sm" asChild className="w-fit">
           <Link href="/doctors">
-            <ChevronLeft className="h-4 w-4" /> All doctors
+            <ChevronLeft className="h-4 w-4" /> All specialists
           </Link>
         </Button>
 
@@ -61,15 +63,22 @@ export default async function DoctorProfilePage({
                 <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} gradient={color.avatar} size={64} />
                 <div>
                   <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{fullName}</h1>
-                  <span
-                    className={cn(
-                      'mt-1.5 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
-                      color.pill,
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium',
+                        color.pill,
+                      )}
+                    >
+                      <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
+                      {doctor.specialty}
+                    </span>
+                    {roleLabel && (
+                      <span className="inline-flex items-center rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        {roleLabel}
+                      </span>
                     )}
-                  >
-                    <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
-                    {doctor.specialty}
-                  </span>
+                  </div>
                   <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
                     <li className="inline-flex items-center gap-1.5">
                       <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" aria-hidden />

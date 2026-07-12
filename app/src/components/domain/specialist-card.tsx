@@ -5,28 +5,44 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn, formatCurrency } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
-import { availabilityTone, doctorLanguages, doctorRating, doctorVisitMode } from '@/lib/doctor-meta';
-import type { NextAvailable } from '@/lib/doctor-meta';
+import {
+  availabilityTone,
+  formatSpecialistRole,
+  specialistLanguages,
+  specialistRating,
+  specialistVisitMode,
+} from '@/lib/specialist-meta';
+import type { NextAvailable } from '@/lib/specialist-meta';
 import type { Practitioner } from '@/lib/data/types';
 
 /**
- * Doctor card — matches the Claude Design "Doctor Card" spec:
+ * Specialist card — matches the Claude Design spec:
  * avatar with availability dot, name + specialty pill + rating, bio,
- * attribute chips (visit mode / insurance / languages), a next-available bar,
+ * attribute chips (role / visit mode / insurance / languages), a next-available bar,
  * and a consultation-fee + Book footer.
+ *
+ * Note: the underlying data type stays `Practitioner` (that's what OpenEMR/FHIR
+ * call the entity). The UI vocabulary is "specialist" because the roster
+ * includes nurses and technicians too.
  */
-export function DoctorCard({
-  doctor,
+export function SpecialistCard({
+  specialist,
   nextAvailable,
 }: {
-  doctor: Practitioner;
+  specialist: Practitioner;
   nextAvailable?: NextAvailable;
 }) {
-  const fullName = `${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim();
-  const color = specialtyColor(doctor.specialty);
+  const fullName = `${specialist.title} ${specialist.firstName} ${specialist.lastName}`.trim();
+  const color = specialtyColor(specialist.specialty);
   const tone = availabilityTone(nextAvailable);
   const nextAvailableLabel = nextAvailable?.label;
-  const chips = [doctorVisitMode(doctor.id), 'Accepts insurance', doctorLanguages(doctor.id)];
+  const roleLabel = formatSpecialistRole(specialist.role);
+  const chips = [
+    ...(roleLabel ? [roleLabel] : []),
+    specialistVisitMode(specialist.id),
+    'Accepts insurance',
+    specialistLanguages(specialist.id),
+  ];
 
   return (
     <Card className="card-hover flex flex-col overflow-hidden">
@@ -34,7 +50,7 @@ export function DoctorCard({
         {/* Header: avatar + name + specialty + rating */}
         <div className="flex items-start gap-3">
           <div className="relative shrink-0">
-            <InitialsAvatar name={`${doctor.firstName} ${doctor.lastName}`} gradient={color.avatar} size={52} />
+            <InitialsAvatar name={`${specialist.firstName} ${specialist.lastName}`} gradient={color.avatar} size={52} />
             <span
               aria-hidden
               className={cn(
@@ -55,18 +71,18 @@ export function DoctorCard({
                 )}
               >
                 <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
-                {doctor.specialty}
+                {specialist.specialty}
               </span>
               <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground">
                 <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
-                {doctorRating(doctor.id)}
+                {specialistRating(specialist.id)}
               </span>
             </div>
           </div>
         </div>
 
         {/* Bio */}
-        {doctor.bio && <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{doctor.bio}</p>}
+        {specialist.bio && <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{specialist.bio}</p>}
 
         {/* Attribute chips */}
         <div className="flex flex-wrap gap-1.5">
@@ -95,11 +111,11 @@ export function DoctorCard({
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Consultation</p>
             <p className="text-lg font-semibold tabular-nums">
-              {formatCurrency(doctor.consultationFeeMinor, doctor.currency)}
+              {formatCurrency(specialist.consultationFeeMinor, specialist.currency)}
             </p>
           </div>
           <Button asChild className="group/btn">
-            <Link href={`/doctors/${doctor.id}`}>
+            <Link href={`/doctors/${specialist.id}`}>
               Book <ArrowRight className="transition-transform group-hover/btn:translate-x-0.5" />
             </Link>
           </Button>
