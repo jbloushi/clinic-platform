@@ -18,6 +18,7 @@ import { formatNextAvailable } from '@/lib/doctor-meta';
 import type { NextAvailable } from '@/lib/doctor-meta';
 import type { Practitioner } from '@/lib/data/types';
 import { DoctorCard } from '@/components/domain/doctor-card';
+import { specialtyColor } from '@/lib/specialty-colors';
 
 export const dynamic = 'force-dynamic';
 
@@ -287,6 +288,9 @@ export default async function LandingPage() {
 }
 
 function HeroVisual() {
+  // Matches the real specialty-color system so this illustrative card doesn't
+  // contradict how the same doctor actually appears on /doctors.
+  const heroDoctorColor = specialtyColor('Cardiology');
   return (
     <div className="relative mx-auto w-full max-w-sm lg:mx-0 lg:max-w-none">
       {/* Fake "appointment card" preview — hints at what booking looks like */}
@@ -303,14 +307,14 @@ function HeroVisual() {
         <Card className="relative overflow-hidden shadow-lg">
           <CardContent className="space-y-4 pt-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-sm font-semibold text-white">
+              <div className={`flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br ${heroDoctorColor.avatar} text-sm font-semibold text-white`}>
                 YR
               </div>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">Dr. Yusuf Rahman</p>
                 <p className="truncate text-xs text-muted-foreground">Cardiology</p>
               </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
                 <span className="status-dot bg-emerald-500" /> Available
               </span>
             </div>

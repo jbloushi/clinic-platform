@@ -82,7 +82,7 @@ export function DoctorBrowser({
               onClick={() => setSpecialty(on ? '' : s)}
               aria-pressed={on}
               className={cn(
-                'inline-flex min-h-[36px] items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors press-scale',
+                'inline-flex min-h-[44px] items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors press-scale',
                 on ? c.pill : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',
               )}
             >
@@ -143,7 +143,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       onClick={onClick}
       aria-pressed={active}
       className={cn(
-        'inline-flex min-h-[36px] items-center rounded-full border px-3 text-sm font-medium transition-colors press-scale',
+        'inline-flex min-h-[44px] items-center rounded-full border px-3 text-sm font-medium transition-colors press-scale',
         active
           ? 'border-primary bg-primary text-primary-foreground'
           : 'border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground',

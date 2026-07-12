@@ -32,7 +32,7 @@ export default async function ConfirmedPage({ searchParams }: { searchParams: Pr
       </header>
 
       <main className="mx-auto flex max-w-2xl flex-col items-center px-4 py-12 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-8 ring-emerald-50">
+        <div className="success-pop flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 ring-8 ring-emerald-50">
           <CheckCircle2 className="h-8 w-8" />
         </div>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight">You&apos;re booked!</h1>

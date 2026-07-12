@@ -110,7 +110,7 @@ of `/ops` and `/doctor/schedule` at 1280px and 375px; `tsc` clean; `/code-review
 
 ---
 
-## Phase E — polish + one delight, brand mode  ▶ SONNET 5
+## Phase E — polish + one delight, brand mode  ▶ SONNET 5 — ✅ DONE
 
 Read both docs first. Brand register, but calm-clinical (see PRODUCT.md anti-references).
 
