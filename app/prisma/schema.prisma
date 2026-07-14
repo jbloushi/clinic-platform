@@ -67,6 +67,19 @@ model Service {
   createdAt       DateTime @default(now())
 }
 
+/// Service <-> specialist eligibility (many-to-many). A service with ZERO rows
+/// here means "any active specialist can perform it" — the fallback so ops
+/// don't have to configure every service before booking works.
+model ServiceSpecialist {
+  id                     String   @id @default(cuid())
+  serviceId              String
+  specialistOpenemrUuid  String
+  createdAt              DateTime @default(now())
+  @@unique([serviceId, specialistOpenemrUuid])
+  @@index([serviceId])
+  @@index([specialistOpenemrUuid])
+}
+
 /// Booking hold — temporary slot reservation before payment. On confirm, we create the OpenEMR appointment.
 model BookingHold {
   id                    String   @id @default(cuid())

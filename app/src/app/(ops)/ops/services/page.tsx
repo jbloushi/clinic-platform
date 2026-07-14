@@ -7,8 +7,11 @@ import { PageHeader } from '@/components/domain/page-header';
 import { EmptyState } from '@/components/domain/states';
 import { prisma } from '@/lib/db';
 import { requireStaff } from '@/lib/auth/guards';
+import { getDataProvider } from '@/lib/data';
+import { getServiceSpecialistUuids } from '@/lib/data/platform-repo';
 import { formatCurrency } from '@/lib/utils';
 import { NewServiceDialog } from './new-service-dialog';
+import { EditSpecialistsDialog, type SpecialistOption } from './edit-specialists-dialog';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,6 +24,19 @@ async function toggleActive(id: string, active: boolean) {
 
 export default async function ServicesPage() {
   const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
+
+  const dp = getDataProvider();
+  const [specialists, assignments] = await Promise.all([
+    dp.getPractitioners({ activeOnly: true }).catch(() => []),
+    Promise.all(services.map((s) => getServiceSpecialistUuids(s.id))),
+  ]);
+  const specialistOptions: SpecialistOption[] = specialists.map((sp) => ({
+    uuid: sp.id,
+    name: `${sp.title} ${sp.firstName} ${sp.lastName}`.trim(),
+    specialty: sp.specialty,
+  }));
+  const specialistNameByUuid = new Map(specialistOptions.map((sp) => [sp.uuid, sp.name]));
+  const assignedUuidsByService = new Map(services.map((s, i) => [s.id, assignments[i]]));
 
   return (
     <div className="space-y-6">
@@ -47,32 +63,53 @@ export default async function ServicesPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Fee</TableHead>
+                <TableHead>Assigned to</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {services.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{s.durationMinutes} min</TableCell>
-                  <TableCell>{formatCurrency(s.priceMinor, s.currency)}</TableCell>
-                  <TableCell>
-                    {s.active ? (
-                      <Badge variant="secondary">Active</Badge>
-                    ) : (
-                      <Badge variant="outline">Inactive</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <form action={async () => { 'use server'; await toggleActive(s.id, !s.active); }}>
-                      <Button type="submit" size="sm" variant="ghost">
-                        {s.active ? 'Deactivate' : 'Activate'}
-                      </Button>
-                    </form>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {services.map((s) => {
+                const assignedUuids = assignedUuidsByService.get(s.id) ?? [];
+                return (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{s.durationMinutes} min</TableCell>
+                    <TableCell>{formatCurrency(s.priceMinor, s.currency)}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {assignedUuids.length === 0 ? (
+                        <span className="italic">Any specialist</span>
+                      ) : (
+                        <span title={assignedUuids.map((u) => specialistNameByUuid.get(u) ?? u).join(', ')}>
+                          {assignedUuids.length} specialist{assignedUuids.length === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {s.active ? (
+                        <Badge variant="secondary">Active</Badge>
+                      ) : (
+                        <Badge variant="outline">Inactive</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <EditSpecialistsDialog
+                          serviceId={s.id}
+                          serviceName={s.name}
+                          allSpecialists={specialistOptions}
+                          selectedUuids={assignedUuids}
+                        />
+                        <form action={async () => { 'use server'; await toggleActive(s.id, !s.active); }}>
+                          <Button type="submit" size="sm" variant="ghost">
+                            {s.active ? 'Deactivate' : 'Activate'}
+                          </Button>
+                        </form>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>

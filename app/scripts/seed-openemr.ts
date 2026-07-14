@@ -157,6 +157,8 @@ async function reset(conn: Connection) {
   await prisma.patientIdentity.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.sessionLog.deleteMany();
+  // serviceSpecialist rows reference doctor UUIDs we're about to regenerate.
+  await prisma.serviceSpecialist.deleteMany();
 }
 
 // ----------------------------------------------------------------------------
@@ -418,6 +420,36 @@ async function seedAppointments(conn: Connection, patients: PatientRow[], doctor
   return plans;
 }
 
+/**
+ * Assign realistic specialist eligibility per service (Phase 2 of the
+ * specialists program). Uses real freshly-seeded doctor UUIDs, so this must
+ * run after seedDoctors() and can only live here — not in prisma/seed.ts,
+ * which runs first and has no OpenEMR UUIDs to reference yet.
+ *
+ * 'New consultation' / 'Follow-up visit' are intentionally left with zero
+ * rows (= any active specialist), demonstrating the fallback path.
+ */
+async function seedServiceSpecialists(doctors: DoctorRow[]) {
+  console.log('· service <-> specialist eligibility…');
+  const services = await prisma.service.findMany();
+  if (services.length === 0) return;
+
+  const bySpecialty = (specialty: string) => doctors.filter((d) => d.specialty === specialty).map((d) => d.uuid);
+
+  const rules: Record<string, string[]> = {
+    'Extended consultation': bySpecialty('Internal Medicine'),
+    'Procedure (in-clinic)': bySpecialty('Dermatology'),
+  };
+
+  for (const svc of services) {
+    const uuids = rules[svc.name];
+    if (!uuids || uuids.length === 0) continue;
+    await prisma.serviceSpecialist.createMany({
+      data: uuids.map((specialistOpenemrUuid) => ({ serviceId: svc.id, specialistOpenemrUuid })),
+    });
+  }
+}
+
 async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
   console.log('· platform wallet / bookings / payments…');
   const services = await prisma.service.findMany({ where: { active: true } });
@@ -502,6 +534,7 @@ async function main() {
   const patients = await seedPatients(conn);
   await seedClinical(conn, patients, doctors);
   const appts = await seedAppointments(conn, patients, doctors);
+  await seedServiceSpecialists(doctors);
   await seedPlatform(patients, doctors);
   await conn.end();
 

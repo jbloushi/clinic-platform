@@ -59,6 +59,39 @@ export function listServices() {
   return prisma.service.findMany({ orderBy: { name: 'asc' } });
 }
 
+// ---------- Service <-> specialist eligibility ----------
+//
+// Kept Prisma-only (no OpenEMR reads here, to avoid a circular import with
+// the OpenEMR provider, which already imports this file for availability).
+// getServiceSpecialistUuids returns the RAW join rows — an empty array means
+// "no rows configured yet", not "no specialists eligible". Callers that need
+// booking-time eligibility (empty = any active specialist) apply that
+// fallback themselves once they already have the active specialist list in
+// hand (see provider.ts's getEligibleSpecialistUuids in Phase 3).
+
+export async function getServiceSpecialistUuids(serviceId: string): Promise<string[]> {
+  const rows = await prisma.serviceSpecialist.findMany({
+    where: { serviceId },
+    select: { specialistOpenemrUuid: true },
+  });
+  return rows.map((r) => r.specialistOpenemrUuid);
+}
+
+/** Atomically replace the full set of specialists eligible for a service. */
+export async function setServiceSpecialists(serviceId: string, specialistUuids: string[]): Promise<void> {
+  const unique = Array.from(new Set(specialistUuids));
+  await prisma.$transaction([
+    prisma.serviceSpecialist.deleteMany({ where: { serviceId } }),
+    ...(unique.length
+      ? [
+          prisma.serviceSpecialist.createMany({
+            data: unique.map((specialistOpenemrUuid) => ({ serviceId, specialistOpenemrUuid })),
+          }),
+        ]
+      : []),
+  ]);
+}
+
 // ---------- Wallet ----------
 
 export async function getWalletBalance(patientId: string): Promise<number> {
