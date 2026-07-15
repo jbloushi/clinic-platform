@@ -116,7 +116,7 @@ export function fromPractitioner(
     upin: '',
     facility_id: '3',
     facility: 'Your Clinic Name',
-    physician_type: '',
+    physician_type: p.role ?? '',
     email: p.email ?? '',
   };
 }

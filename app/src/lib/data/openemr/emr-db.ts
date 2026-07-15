@@ -38,3 +38,12 @@ export async function authorizePractitioner(uuid: string, opts: { username?: str
   const [res] = (await p.query(sql, [username ?? null, hex])) as any;
   return res?.affectedRows > 0;
 }
+
+/** Toggle a practitioner's active flag. Same REST gap as authorizePractitioner above. */
+export async function setPractitionerActive(uuid: string, active: boolean): Promise<boolean> {
+  const p = getPool();
+  if (!p) return false;
+  const hex = uuid.replace(/-/g, '');
+  const [res] = (await p.query('UPDATE users SET active = ? WHERE uuid = UNHEX(?)', [active ? 1 : 0, hex])) as any;
+  return res?.affectedRows > 0;
+}

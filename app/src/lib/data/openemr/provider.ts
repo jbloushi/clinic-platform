@@ -109,6 +109,33 @@ export const openemrProvider: DataProvider = {
     return created;
   },
 
+  async updatePractitioner(
+    id: string,
+    data: Partial<Pick<Practitioner, 'firstName' | 'lastName' | 'title' | 'specialty' | 'bio' | 'role'>> & {
+      npi?: string;
+    },
+  ): Promise<Practitioner> {
+    const current = await openemrProvider.getPractitionerById(id);
+    if (!current) throw new Error(`Practitioner ${id} not found`);
+    const merged = { ...current, ...data };
+    const res = await restJson<any>(`/practitioner/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: fromPractitioner(merged),
+    });
+    const dto = (res?.data ?? res) as OpenEMRPractitionerDto;
+    const updated = toPractitioner(dto);
+    updated.availability = current.availability;
+    return updated;
+  },
+
+  async setPractitionerActive(id: string, active: boolean): Promise<void> {
+    // OpenEMR's REST practitioner endpoint doesn't reliably expose `active`
+    // as a writable field — same REST gap createPractitioner already works
+    // around via the direct-DB shim for `authorized`.
+    const { setPractitionerActive } = await import('./emr-db');
+    await setPractitionerActive(id, active);
+  },
+
   // -------- Scheduling --------
   async getAvailableSlots(
     practitionerId: string,

@@ -5,17 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-
-const SPECIALTIES = [
-  'Internal Medicine',
-  'Cardiology',
-  'Pediatrics',
-  'Dermatology',
-  'Orthopedics',
-  'ENT',
-  'General Practice',
-  'Family Medicine',
-];
+import { SPECIALTIES } from '@/lib/specialties';
 
 export function NewProviderForm() {
   const router = useRouter();

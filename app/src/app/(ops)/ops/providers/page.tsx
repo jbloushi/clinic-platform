@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { revalidatePath } from 'next/cache';
 import { Plus, Stethoscope } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -7,9 +8,17 @@ import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/domain/page-header';
 import { EmptyState, ErrorState } from '@/components/domain/states';
 import { getDataProvider } from '@/lib/data';
+import { requireStaff } from '@/lib/auth/guards';
 import type { Practitioner } from '@/lib/data/types';
 
 export const dynamic = 'force-dynamic';
+
+async function toggleActive(id: string, active: boolean) {
+  'use server';
+  await requireStaff(['admin']);
+  await getDataProvider().setPractitionerActive(id, active);
+  revalidatePath('/ops/providers');
+}
 
 export default async function ProvidersPage() {
   let practitioners: Practitioner[] = [];
@@ -83,9 +92,16 @@ export default async function ProvidersPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button asChild size="sm" variant="ghost">
-                      <Link href={`/ops/providers/${p.id}`}>Edit availability</Link>
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button asChild size="sm" variant="ghost">
+                        <Link href={`/ops/providers/${p.id}`}>Edit</Link>
+                      </Button>
+                      <form action={async () => { 'use server'; await toggleActive(p.id, !p.active); }}>
+                        <Button type="submit" size="sm" variant="ghost">
+                          {p.active ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </form>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

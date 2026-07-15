@@ -92,6 +92,30 @@ export async function setServiceSpecialists(serviceId: string, specialistUuids: 
   ]);
 }
 
+/** Inverse of getServiceSpecialistUuids: the services a given specialist is explicitly linked to. */
+export async function getServicesForSpecialist(specialistUuid: string): Promise<string[]> {
+  const rows = await prisma.serviceSpecialist.findMany({
+    where: { specialistOpenemrUuid: specialistUuid },
+    select: { serviceId: true },
+  });
+  return rows.map((r) => r.serviceId);
+}
+
+/** Atomically replace the full set of services a specialist is eligible for. */
+export async function setSpecialistServices(specialistUuid: string, serviceIds: string[]): Promise<void> {
+  const unique = Array.from(new Set(serviceIds));
+  await prisma.$transaction([
+    prisma.serviceSpecialist.deleteMany({ where: { specialistOpenemrUuid: specialistUuid } }),
+    ...(unique.length
+      ? [
+          prisma.serviceSpecialist.createMany({
+            data: unique.map((serviceId) => ({ serviceId, specialistOpenemrUuid: specialistUuid })),
+          }),
+        ]
+      : []),
+  ]);
+}
+
 /**
  * Confirmed-booking counts per specialist since a given date — used by the
  * auto-assign load-balancing tie-break (fewest recent bookings first).

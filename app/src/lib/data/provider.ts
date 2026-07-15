@@ -24,6 +24,11 @@ export interface DataProvider {
   getPractitioners(q?: PractitionerQuery): Promise<Practitioner[]>;
   getPractitionerById(id: string): Promise<Practitioner | null>;
   createPractitioner(data: Omit<Practitioner, 'id'> & { npi?: string; email?: string }): Promise<Practitioner>;
+  updatePractitioner(
+    id: string,
+    data: Partial<Pick<Practitioner, 'firstName' | 'lastName' | 'title' | 'specialty' | 'bio'>> & { npi?: string },
+  ): Promise<Practitioner>;
+  setPractitionerActive(id: string, active: boolean): Promise<void>;
 
   // Scheduling
   getAvailableSlots(
