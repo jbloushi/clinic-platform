@@ -133,6 +133,7 @@ function synthesizeNpi(p: Partial<Practitioner>): string {
 
 export interface OpenEMRAppointmentDto {
   uuid?: string;
+  id?: string | number;          // appointment create response uses this, not eid/pc_eid
   eid?: string | number;         // event id
   pc_eid?: string | number;
   pid?: string | number;
@@ -151,7 +152,7 @@ export function toAppointment(dto: OpenEMRAppointmentDto): Appointment {
   const start = combineDateTime(dto.pc_eventDate, dto.pc_startTime);
   const end = combineDateTime(dto.pc_eventDate, dto.pc_endTime);
   return {
-    id: String(dto.eid ?? dto.pc_eid ?? dto.uuid ?? ''),
+    id: String(dto.eid ?? dto.pc_eid ?? dto.id ?? dto.uuid ?? ''),
     patientId: String(dto.pid ?? dto.pc_pid ?? ''),
     practitionerId: String(dto.pc_aid ?? ''),
     start,

@@ -139,12 +139,25 @@ export async function restJson<T = unknown>(path: string, opts: FetchOpts = {}):
   }
   if (res.status === 204) return undefined as T;
   const json = (await res.json()) as any;
-  // OpenEMR quirk: some endpoints return HTTP 200 with a `validationErrors` object
-  // instead of the created record when the payload fails validation. Surface these.
-  if (opts.method && opts.method !== 'GET' && json && typeof json === 'object') {
-    const ve = (json as any).validationErrors;
+  // OpenEMR quirk: write endpoints can return HTTP 200 with a validation-error
+  // payload instead of the created/updated record, in (at least) two shapes:
+  //   1. { validationErrors: { field: {...} } } — most endpoints (patient, practitioner)
+  //   2. { field: { RuleName: "message" } } — no wrapper key at all (appointment).
+  // Shape 2 is indistinguishable from a legitimate record by key name alone, so
+  // detect it structurally: a validation-error map always has EVERY top-level
+  // value be itself a plain object (rule name -> message); a real record's
+  // fields are primitives/arrays. If every value is a nested plain object,
+  // treat the whole response as a field-error map.
+  if (opts.method && opts.method !== 'GET' && json && typeof json === 'object' && !Array.isArray(json)) {
+    const ve = json.validationErrors;
     if (ve && ((Array.isArray(ve) && ve.length) || (typeof ve === 'object' && Object.keys(ve).length))) {
       throw new OpenEMRError(422, `REST ${opts.method} ${path} validation: ${JSON.stringify(ve)}`);
+    }
+    const values = Object.values(json);
+    const looksLikeFieldErrorMap =
+      values.length > 0 && values.every((v) => v !== null && typeof v === 'object' && !Array.isArray(v));
+    if (looksLikeFieldErrorMap) {
+      throw new OpenEMRError(422, `REST ${opts.method} ${path} validation: ${JSON.stringify(json)}`);
     }
   }
   return json as T;

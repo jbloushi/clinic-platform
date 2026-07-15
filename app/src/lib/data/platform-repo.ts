@@ -92,6 +92,27 @@ export async function setServiceSpecialists(serviceId: string, specialistUuids: 
   ]);
 }
 
+/**
+ * Confirmed-booking counts per specialist since a given date — used by the
+ * auto-assign load-balancing tie-break (fewest recent bookings first).
+ */
+export async function getBookingCountsSince(
+  specialistUuids: string[],
+  since: Date,
+): Promise<Map<string, number>> {
+  if (specialistUuids.length === 0) return new Map();
+  const rows = await prisma.bookingHold.groupBy({
+    by: ['practitionerOpenemrId'],
+    where: {
+      practitionerOpenemrId: { in: specialistUuids },
+      status: 'confirmed',
+      createdAt: { gte: since },
+    },
+    _count: { _all: true },
+  });
+  return new Map(rows.map((r) => [r.practitionerOpenemrId, r._count._all]));
+}
+
 // ---------- Wallet ----------
 
 export async function getWalletBalance(patientId: string): Promise<number> {

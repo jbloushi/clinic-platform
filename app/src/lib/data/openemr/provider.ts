@@ -27,8 +27,8 @@ import {
   type OpenEMRPatientDto,
   type OpenEMRPractitionerDto,
 } from './mappers';
-import { computeAvailableSlots } from './slots';
-import { getPractitionerAvailability } from '../platform-repo';
+import { computeAvailableSlots, generateSlotsFromBooked } from './slots';
+import { getBookingCountsSince, getPractitionerAvailability, getServiceSpecialistUuids } from '../platform-repo';
 
 /**
  * Real OpenEMR-backed provider. All calls go through the OAuth2-authenticated client.
@@ -116,8 +116,11 @@ export const openemrProvider: DataProvider = {
     to: ISODate,
     slotMinutes?: number,
   ): Promise<Slot[]> {
-    const availability = await getPractitionerAvailability(practitionerId);
-    return computeAvailableSlots(practitionerId, availability, from, to, slotMinutes);
+    const [availability, numericId] = await Promise.all([
+      getPractitionerAvailability(practitionerId),
+      resolvePractitionerNumericId(practitionerId),
+    ]);
+    return computeAvailableSlots(practitionerId, availability, from, to, slotMinutes, numericId);
   },
 
   async getAppointments(q: AppointmentQuery = {}): Promise<Appointment[]> {
@@ -290,6 +293,133 @@ export const openemrProvider: DataProvider = {
     };
   },
 };
+
+// ----------------------------------------------------------------------------
+// Specialists program (Phase 3): auto-assign a specialist by service +
+// availability. Standalone exports (not part of the generic DataProvider
+// interface) since these are OpenEMR-specific batch/eligibility helpers.
+// ----------------------------------------------------------------------------
+
+/**
+ * Eligible specialist UUIDs for a service: the raw service<->specialist join
+ * (Phase 2) if any rows exist, otherwise every active specialist (the "any
+ * specialist" fallback).
+ */
+export async function getEligibleSpecialistUuids(serviceId: string): Promise<string[]> {
+  const raw = await getServiceSpecialistUuids(serviceId);
+  if (raw.length > 0) return raw;
+  const all = await openemrProvider.getPractitioners({ activeOnly: true });
+  return all.map((p) => p.id);
+}
+
+/**
+ * Free slots for many specialists across [from, to] with a SINGLE OpenEMR
+ * appointments fetch (not one per specialist). OpenEMR ignores the
+ * pc_aid/date_start/date_end filters server-side regardless of what's passed,
+ * so one unfiltered-in-practice fetch already contains every specialist's
+ * appointments — computeAvailableSlots calling itself once per doctor was
+ * doing this same full fetch N times for no benefit.
+ */
+export async function getAvailableSlotsBulk(
+  specialistUuids: string[],
+  from: ISODate,
+  to: ISODate,
+  overrideSlotMinutes?: number,
+): Promise<Record<string, Slot[]>> {
+  const pracMap = await getPractitionerMaps();
+
+  let items: Appointment[] = [];
+  try {
+    const raw = await restJson<any>('/appointment', { query: { date_start: from, date_end: to } });
+    items = extractArray<OpenEMRAppointmentDto>(raw)
+      .map(toAppointment)
+      .filter((a) => a.status !== 'cancelled')
+      // OpenEMR ignores the date filter — enforce it locally (same as getAppointments).
+      .filter((a) => a.start.slice(0, 10) >= from && a.start.slice(0, 10) <= to);
+  } catch {
+    items = []; // fail open — an empty booked list just means "show all slots as free"
+  }
+
+  const bookedByUuid = new Map<string, { start: number; end: number }[]>();
+  for (const a of items) {
+    const uuid = pracMap.byNumeric.get(a.practitionerId)?.uuid ?? a.practitionerId;
+    const arr = bookedByUuid.get(uuid) ?? [];
+    arr.push({ start: +new Date(a.start), end: +new Date(a.end) });
+    bookedByUuid.set(uuid, arr);
+  }
+
+  const result: Record<string, Slot[]> = {};
+  await Promise.all(
+    specialistUuids.map(async (uuid) => {
+      const availability = await getPractitionerAvailability(uuid);
+      result[uuid] = generateSlotsFromBooked(uuid, availability, from, to, bookedByUuid.get(uuid) ?? [], overrideSlotMinutes);
+    }),
+  );
+  return result;
+}
+
+/**
+ * Rank eligible specialists for a specific [startIso, endIso) slot:
+ * least-loaded first (fewest confirmed bookings in the last 30 days), ties
+ * broken by UUID for a reproducible result, filtered to those OpenEMR shows
+ * as free for this slot right now (not the possibly-stale slot list the
+ * patient saw). Returns the full ordered list, not just the first pick —
+ * the booking route walks it as a fallback chain: the real serialization
+ * happens at the BookingHold unique-constraint gate, so if our top pick
+ * loses that race to a concurrent request, the route retries the next
+ * candidate here instead of giving up.
+ *
+ * Fetches the target day's appointments ONCE (same fetch-once-partition-many
+ * pattern as getAvailableSlotsBulk) rather than once per candidate — with a
+ * large eligible pool ("any specialist" services can have 8+), a per-
+ * candidate fetch loop turned booking confirmation into a multi-second wait.
+ */
+export async function rankSpecialistsForSlot(
+  eligibleUuids: string[],
+  startIso: ISODateTime,
+  endIso: ISODateTime,
+): Promise<string[]> {
+  if (eligibleUuids.length === 0) return [];
+
+  const since = new Date();
+  since.setDate(since.getDate() - 30);
+  const [counts, pracMap] = await Promise.all([getBookingCountsSince(eligibleUuids, since), getPractitionerMaps()]);
+  const ordered = [...eligibleUuids].sort((a, b) => {
+    const ca = counts.get(a) ?? 0;
+    const cb = counts.get(b) ?? 0;
+    if (ca !== cb) return ca - cb;
+    return a.localeCompare(b);
+  });
+
+  const day = startIso.slice(0, 10);
+  const startMs = +new Date(startIso);
+  const endMs = +new Date(endIso);
+
+  let items: Appointment[] = [];
+  try {
+    const raw = await restJson<any>('/appointment', { query: { date_start: day, date_end: day } });
+    items = extractArray<OpenEMRAppointmentDto>(raw)
+      .map(toAppointment)
+      .filter((a) => a.status !== 'cancelled' && a.start.slice(0, 10) === day);
+  } catch {
+    items = []; // fail open — treating every candidate as free when the read fails is
+    // safer than blocking every booking; the BookingHold unique-constraint gate and
+    // createAppointment's own OpenEMR-side write still reject a genuine conflict.
+  }
+
+  const bookedByUuid = new Map<string, { start: number; end: number }[]>();
+  for (const a of items) {
+    const uuid = pracMap.byNumeric.get(a.practitionerId)?.uuid ?? a.practitionerId;
+    const arr = bookedByUuid.get(uuid) ?? [];
+    arr.push({ start: +new Date(a.start), end: +new Date(a.end) });
+    bookedByUuid.set(uuid, arr);
+  }
+
+  return ordered.filter((uuid) => {
+    const booked = bookedByUuid.get(uuid) ?? [];
+    return !booked.some((b) => b.start < endMs && b.end > startMs);
+  });
+}
 
 function extractArray<T>(raw: any): T[] {
   if (Array.isArray(raw)) return raw as T[];

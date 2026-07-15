@@ -81,6 +81,15 @@ model ServiceSpecialist {
 }
 
 /// Booking hold — temporary slot reservation before payment. On confirm, we create the OpenEMR appointment.
+///
+/// The (practitionerOpenemrId, startAt) unique constraint is the atomic gate
+/// against double-booking: OpenEMR's own appointment table has no such
+/// constraint (confirmed empirically — two concurrent creates for the same
+/// provider/time both succeed there), so the serialization has to happen on
+/// our side. The booking API creates this row FIRST and lets the unique
+/// constraint reject a concurrent duplicate before ever writing to OpenEMR.
+/// There's no cancel/reschedule flow yet, so this can't yet block a
+/// legitimate re-book of a cancelled slot — revisit if one is added.
 model BookingHold {
   id                    String   @id @default(cuid())
   patientIdentityId     String?
@@ -94,7 +103,7 @@ model BookingHold {
   holdExpiresAt         DateTime
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-  @@index([practitionerOpenemrId, startAt])
+  @@unique([practitionerOpenemrId, startAt])
 }
 
 /// Wallet ledger — append-only. Balance is derived.

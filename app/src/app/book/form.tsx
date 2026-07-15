@@ -26,7 +26,9 @@ export function BookingForm({
   currency,
   services,
 }: {
-  practitionerId: string;
+  // Omitted when booking via /book/service — the specialist is auto-assigned
+  // server-side from the service's eligible pool at commit time.
+  practitionerId?: string;
   start: string;
   end: string;
   consultationFeeMinor: number;

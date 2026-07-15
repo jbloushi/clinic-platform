@@ -4,9 +4,12 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { getDataProvider } from '@/lib/data';
 import { normalizeMobile } from '@/lib/auth/mobile';
+import { getEligibleSpecialistUuids, rankSpecialistsForSlot } from '@/lib/data/openemr/provider';
 
 const bodySchema = z.object({
-  practitionerId: z.string().min(1),
+  // Omitted from /book/service — the specialist is auto-assigned server-side
+  // from the service's eligible pool. Present when booked from /doctors/[id].
+  practitionerId: z.string().min(1).optional(),
   start: z.string().datetime(),
   end: z.string().datetime(),
   reason: z.string().optional(),
@@ -53,23 +56,60 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Race check
-  const day = parsed.data.start.slice(0, 10);
-  const existing = await dp.getAppointments({ practitionerId: parsed.data.practitionerId, from: day, to: day }).catch(() => []);
-  const conflict = existing.some(
-    (a) =>
-      a.status !== 'cancelled' &&
-      new Date(a.start).getTime() < new Date(parsed.data.end).getTime() &&
-      new Date(a.end).getTime() > new Date(parsed.data.start).getTime(),
-  );
-  if (conflict) return NextResponse.json({ error: 'slot_conflict' }, { status: 409 });
+  // Resolve candidate specialists. Explicit pick from /doctors/[id] is a
+  // single-item list — a P2002 hit there just means someone else took that
+  // exact slot. Auto-assign from /book/service gets the full ordered
+  // eligible pool: OpenEMR appointments still block obviously-busy
+  // candidates (e.g. one booked directly through the ops calendar, which
+  // never touches BookingHold), and if our top pick loses the atomic gate
+  // below to a concurrent request, we fall through to the next one instead
+  // of 409ing while other specialists are still free.
+  const candidates = parsed.data.practitionerId
+    ? [parsed.data.practitionerId]
+    : await rankSpecialistsForSlot(await getEligibleSpecialistUuids(service.id), parsed.data.start, parsed.data.end);
+  if (candidates.length === 0) {
+    return NextResponse.json({ error: 'slot_conflict' }, { status: 409 });
+  }
 
-  // Create appointment in OpenEMR
+  // Atomic serialization gate: OpenEMR's appointment table has no unique
+  // constraint preventing two concurrent bookings for the same
+  // practitioner/time (confirmed empirically), so BookingHold's
+  // (practitionerOpenemrId, startAt) unique constraint is what actually
+  // prevents the race. Try candidates in order until one wins the insert.
+  let practitionerId: string | undefined;
+  let booking: Awaited<ReturnType<typeof prisma.bookingHold.create>> | undefined;
+  for (const candidate of candidates) {
+    try {
+      booking = await prisma.bookingHold.create({
+        data: {
+          patientIdentityId: identity.id,
+          practitionerOpenemrId: candidate,
+          serviceId: service.id,
+          startAt: new Date(parsed.data.start),
+          endAt: new Date(parsed.data.end),
+          status: 'confirmed',
+          reason: parsed.data.reason,
+          holdExpiresAt: new Date(parsed.data.start),
+        },
+      });
+      practitionerId = candidate;
+      break;
+    } catch (e: any) {
+      if (e?.code === 'P2002') continue; // candidate just got taken — try the next one
+      throw e;
+    }
+  }
+  if (!practitionerId || !booking) {
+    return NextResponse.json({ error: 'slot_conflict' }, { status: 409 });
+  }
+
+  // Create appointment in OpenEMR. On failure, roll back the hold — it never
+  // represented a real appointment.
   let openemrAppointmentId: string | undefined;
   try {
     const appt = await dp.createAppointment({
       patientId: openemrUuid!,
-      practitionerId: parsed.data.practitionerId,
+      practitionerId,
       start: parsed.data.start,
       end: parsed.data.end,
       reason: parsed.data.reason,
@@ -77,23 +117,11 @@ export async function POST(req: NextRequest) {
     });
     openemrAppointmentId = appt.id;
   } catch (e: any) {
+    await prisma.bookingHold.delete({ where: { id: booking.id } }).catch(() => {});
     return NextResponse.json({ error: `appointment_create_failed: ${e?.message ?? e}` }, { status: 502 });
   }
 
-  // Record locally: booking hold (confirmed) + mock payment
-  const booking = await prisma.bookingHold.create({
-    data: {
-      patientIdentityId: identity.id,
-      practitionerOpenemrId: parsed.data.practitionerId,
-      serviceId: service.id,
-      startAt: new Date(parsed.data.start),
-      endAt: new Date(parsed.data.end),
-      status: 'confirmed',
-      openemrAppointmentId,
-      reason: parsed.data.reason,
-      holdExpiresAt: new Date(parsed.data.start),
-    },
-  });
+  booking = await prisma.bookingHold.update({ where: { id: booking.id }, data: { openemrAppointmentId } });
 
   await prisma.payment.create({
     data: {
@@ -111,7 +139,7 @@ export async function POST(req: NextRequest) {
       actor: `patient:${identity.id}`,
       action: 'booking.confirmed',
       target: booking.id,
-      metadata: JSON.stringify({ openemrAppointmentId, practitionerId: parsed.data.practitionerId }),
+      metadata: JSON.stringify({ openemrAppointmentId, practitionerId }),
     },
   });
 

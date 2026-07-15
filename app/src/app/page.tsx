@@ -113,9 +113,14 @@ export default async function LandingPage() {
                   </Link>
                 </Button>
                 <Button asChild size="lg" variant="outline">
-                  <Link href="/login">I&apos;m a returning patient</Link>
+                  <Link href="/book/service">Book by service</Link>
                 </Button>
               </div>
+              <p className="mt-3 text-sm text-muted-foreground">
+                <Link href="/login" className="font-medium text-primary hover:underline">
+                  I&apos;m a returning patient
+                </Link>
+              </p>
               <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted-foreground">
                 <li className="inline-flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-emerald-600" aria-hidden />
