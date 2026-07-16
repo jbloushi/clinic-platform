@@ -7,8 +7,17 @@ const envSchema = z.object({
 
   ADAPTER_DATABASE_URL: z.string().default('file:./prisma/dev.db'),
   AUTH_SESSION_SECRET: z.string().min(32).default('dev-only-secret-change-me-please-32chars'),
-  OTP_MODE: z.enum(['mock', 'sms']).default('mock'),
+  OTP_MODE: z.enum(['mock', 'sms', 'whatsapp']).default('mock'),
   PAYMENTS_PROVIDER: z.enum(['mock', 'stripe', 'tap', 'hyperpay']).default('mock'),
+
+  // Chatwoot (inbox.mawthook.io) — used to deliver OTPs over WhatsApp when
+  // OTP_MODE=whatsapp. Empty/default until wired up; see lib/chatwoot.ts.
+  CHATWOOT_BASE_URL: z.string().default(''),
+  CHATWOOT_ACCOUNT_ID: z.string().default(''),
+  CHATWOOT_API_TOKEN: z.string().default(''),
+  CHATWOOT_WHATSAPP_INBOX_ID: z.string().default(''),
+  CHATWOOT_OTP_TEMPLATE_NAME: z.string().default(''),
+  CHATWOOT_OTP_TEMPLATE_LANG: z.string().default('en'),
 
   OPENEMR_BASE_URL: z.string().url().default('http://localhost/openemr'),
   OPENEMR_API_URL: z.string().url().default('http://localhost/openemr/apis/default/api'),
