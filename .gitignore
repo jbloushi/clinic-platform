@@ -21,6 +21,9 @@ build/
 *.sqlite3
 *.db
 
+# Demo DB snapshots produced by scripts/seeddump.sh (contain data + hashes)
+demo-snapshots/
+
 # Logs
 logs/
 *.log
