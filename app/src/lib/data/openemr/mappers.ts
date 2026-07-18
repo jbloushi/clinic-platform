@@ -93,7 +93,7 @@ export function toPractitioner(dto: OpenEMRPractitionerDto): Practitioner {
     role: dto.physician_type || undefined,
     bio: dto.info || undefined,
     consultationFeeMinor: 15000,
-    currency: 'USD',
+    currency: 'KWD',
     active,
     availability: [], // stored in platform DB; see providers repository
   };

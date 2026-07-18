@@ -62,7 +62,7 @@ model Service {
   name            String
   durationMinutes Int
   priceMinor      Int
-  currency        String   @default("USD")
+  currency        String   @default("KWD")
   active          Boolean  @default(true)
   /// When false, the service is "doctor-only": hidden from the /book/service
   /// search flow, still bookable in the doctor-first flow under specialists
@@ -116,7 +116,7 @@ model WalletTransaction {
   id          String   @id @default(cuid())
   patientId   String   // PatientIdentity.id
   amountMinor Int      // + credit, - debit
-  currency    String   @default("USD")
+  currency    String   @default("KWD")
   source      String   // consultation_credit | promo | admin_adjustment | payment | refund | expiry
   reference   String?  @db.Text
   expiresAt   DateTime?
@@ -131,7 +131,7 @@ model Payment {
   bookingHoldId  String?
   patientId      String?
   amountMinor    Int
-  currency       String   @default("USD")
+  currency       String   @default("KWD")
   method         String   // card_mock | cash | wallet | transfer
   status         String   // pending | succeeded | failed | refunded
   externalRef    String?

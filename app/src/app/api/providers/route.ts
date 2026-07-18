@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   try {
     const created = await getDataProvider().createPractitioner({
       ...parsed.data,
-      currency: 'USD',
+      currency: 'KWD',
       active: true,
       availability: [],
     });

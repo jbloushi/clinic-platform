@@ -467,7 +467,7 @@ async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
         data: {
           patientId: idn.id,
           amountMinor: pick([5000, 7500, 10000]),
-          currency: 'USD',
+          currency: 'KWD',
           source: 'consultation_credit',
           reference: 'Post-visit credit',
           createdBy: 'system:seed',
@@ -478,7 +478,7 @@ async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
           data: {
             patientId: idn.id,
             amountMinor: -pick([2000, 3000, 5000]),
-            currency: 'USD',
+            currency: 'KWD',
             source: 'payment',
             reference: 'Applied at checkout',
             createdBy: 'system:seed',

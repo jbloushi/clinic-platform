@@ -46,10 +46,10 @@ async function upsertService(
   if (existing) {
     await prisma.service.update({
       where: { id: existing.id },
-      data: { durationMinutes, priceMinor, showInServiceSearch },
+      data: { durationMinutes, priceMinor, showInServiceSearch, currency: 'KWD' },
     });
   } else {
-    await prisma.service.create({ data: { name, durationMinutes, priceMinor, showInServiceSearch } });
+    await prisma.service.create({ data: { name, durationMinutes, priceMinor, showInServiceSearch, currency: 'KWD' } });
   }
 }
 

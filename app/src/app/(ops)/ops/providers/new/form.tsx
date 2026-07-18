@@ -79,7 +79,7 @@ export function NewProviderForm() {
         </div>
       </div>
       <div className="space-y-2 sm:max-w-xs">
-        <Label htmlFor="fee">Consultation fee ($)</Label>
+        <Label htmlFor="fee">Consultation fee (KWD)</Label>
         <Input id="fee" type="number" min="0" step="0.01" value={fee} onChange={(e) => setFee(e.target.value)} />
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}

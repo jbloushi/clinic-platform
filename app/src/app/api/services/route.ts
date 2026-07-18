@@ -7,7 +7,7 @@ const bodySchema = z.object({
   name: z.string().min(1),
   durationMinutes: z.number().int().min(5).max(240),
   priceMinor: z.number().int().min(0),
-  currency: z.string().default('USD'),
+  currency: z.string().default('KWD'),
   showInServiceSearch: z.boolean().default(true),
 });
 

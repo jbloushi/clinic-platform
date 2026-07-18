@@ -74,7 +74,7 @@ export function NewServiceDialog() {
               <Input id="duration" type="number" min={5} required value={duration} onChange={(e) => setDuration(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="price">Fee ($)</Label>
+              <Label htmlFor="price">Fee (KWD)</Label>
               <Input id="price" type="number" min={0} step={0.01} required value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
           </div>

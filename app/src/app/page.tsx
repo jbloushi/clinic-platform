@@ -345,7 +345,7 @@ function HeroVisual() {
             <div className="flex items-center justify-between rounded-md border bg-secondary/60 p-3">
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Consultation</p>
-                <p className="text-sm font-semibold tabular-nums">$250.00</p>
+                <p className="text-sm font-semibold tabular-nums">KWD 250.000</p>
               </div>
               <div className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm">
                 Confirm
