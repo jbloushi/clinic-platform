@@ -8,7 +8,10 @@ import { ServiceBookingFlow } from './service-booking-flow';
 export const dynamic = 'force-dynamic';
 
 export default async function BookByServicePage() {
-  const services = await prisma.service.findMany({ where: { active: true }, orderBy: { name: 'asc' } });
+  const services = await prisma.service.findMany({
+    where: { active: true, showInServiceSearch: true },
+    orderBy: { name: 'asc' },
+  });
 
   return (
     <div className="min-h-screen">

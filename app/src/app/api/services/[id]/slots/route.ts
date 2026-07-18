@@ -16,8 +16,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const to = searchParams.get('to');
   if (!from || !to) return NextResponse.json({ error: 'from and to are required' }, { status: 400 });
 
+  // This endpoint backs the service-search flow only, so doctor-only services
+  // (showInServiceSearch=false) are rejected here too — defense in depth
+  // against reaching a hidden service by direct URL.
   const service = await prisma.service.findUnique({ where: { id } });
-  if (!service || !service.active) return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  if (!service || !service.active || !service.showInServiceSearch) {
+    return NextResponse.json({ error: 'not_found' }, { status: 404 });
+  }
 
   const eligibleUuids = await getEligibleSpecialistUuids(id);
   const byUuid = await getAvailableSlotsBulk(eligibleUuids, from, to, service.durationMinutes);

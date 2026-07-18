@@ -21,6 +21,7 @@ export function NewServiceDialog() {
   const [name, setName] = useState('');
   const [duration, setDuration] = useState('20');
   const [price, setPrice] = useState('150');
+  const [showInSearch, setShowInSearch] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +37,7 @@ export function NewServiceDialog() {
           name,
           durationMinutes: Number(duration),
           priceMinor: Math.round(Number(price) * 100),
+          showInServiceSearch: showInSearch,
         }),
       });
       if (!res.ok) {
@@ -76,6 +78,15 @@ export function NewServiceDialog() {
               <Input id="price" type="number" min={0} step={0.01} required value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={showInSearch}
+              onChange={(e) => setShowInSearch(e.target.checked)}
+              className="h-4 w-4 rounded border-input"
+            />
+            Show in service search (uncheck for doctor-only services)
+          </label>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

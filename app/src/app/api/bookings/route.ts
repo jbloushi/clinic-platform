@@ -5,6 +5,7 @@ import { getSession } from '@/lib/auth/session';
 import { getDataProvider } from '@/lib/data';
 import { normalizeMobile } from '@/lib/auth/mobile';
 import { getEligibleSpecialistUuids, rankSpecialistsForSlot } from '@/lib/data/openemr/provider';
+import { getEligibleServiceIdsForSpecialist } from '@/lib/data/platform-repo';
 
 const bodySchema = z.object({
   // Omitted from /book/service — the specialist is auto-assigned server-side
@@ -64,6 +65,16 @@ export async function POST(req: NextRequest) {
   // never touches BookingHold), and if our top pick loses the atomic gate
   // below to a concurrent request, we fall through to the next one instead
   // of 409ing while other specialists are still free.
+  // Doctor-first: reject a serviceId the chosen specialist isn't eligible for
+  // (defense in depth — the UI already filters the list, but a stale/crafted
+  // request shouldn't book a doctor for a service they can't perform).
+  if (parsed.data.practitionerId) {
+    const eligibleServiceIds = await getEligibleServiceIdsForSpecialist(parsed.data.practitionerId);
+    if (!eligibleServiceIds.has(service.id)) {
+      return NextResponse.json({ error: 'service_not_eligible' }, { status: 400 });
+    }
+  }
+
   const candidates = parsed.data.practitionerId
     ? [parsed.data.practitionerId]
     : await rankSpecialistsForSlot(await getEligibleSpecialistUuids(service.id), parsed.data.start, parsed.data.end);

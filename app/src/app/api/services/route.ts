@@ -8,6 +8,7 @@ const bodySchema = z.object({
   durationMinutes: z.number().int().min(5).max(240),
   priceMinor: z.number().int().min(0),
   currency: z.string().default('USD'),
+  showInServiceSearch: z.boolean().default(true),
 });
 
 export async function POST(req: NextRequest) {

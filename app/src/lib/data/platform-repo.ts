@@ -101,6 +101,27 @@ export async function getServicesForSpecialist(specialistUuid: string): Promise<
   return rows.map((r) => r.serviceId);
 }
 
+/**
+ * The set of serviceIds a specialist may be booked for in the doctor-first
+ * flow — the service-side mirror of `getEligibleSpecialistUuids`. A service is
+ * eligible when it has NO ServiceSpecialist links (unrestricted / "any
+ * specialist") OR is explicitly linked to this specialist. Reads the whole
+ * join once (it's tiny) and partitions in memory. Note: independent of
+ * `showInServiceSearch` — the doctor-first list is eligibility-gated, not
+ * search-gated, so doctor-only services still surface here for eligible docs.
+ */
+export async function getEligibleServiceIdsForSpecialist(specialistUuid: string): Promise<Set<string>> {
+  const [services, links] = await Promise.all([
+    prisma.service.findMany({ where: { active: true }, select: { id: true } }),
+    prisma.serviceSpecialist.findMany({ select: { serviceId: true, specialistOpenemrUuid: true } }),
+  ]);
+  const restricted = new Set(links.map((l) => l.serviceId));
+  const linkedToMe = new Set(
+    links.filter((l) => l.specialistOpenemrUuid === specialistUuid).map((l) => l.serviceId),
+  );
+  return new Set(services.map((s) => s.id).filter((id) => !restricted.has(id) || linkedToMe.has(id)));
+}
+
 /** Atomically replace the full set of services a specialist is eligible for. */
 export async function setSpecialistServices(specialistUuid: string, serviceIds: string[]): Promise<void> {
   const unique = Array.from(new Set(serviceIds));

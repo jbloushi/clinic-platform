@@ -64,6 +64,11 @@ model Service {
   priceMinor      Int
   currency        String   @default("USD")
   active          Boolean  @default(true)
+  /// When false, the service is "doctor-only": hidden from the /book/service
+  /// search flow, still bookable in the doctor-first flow under specialists
+  /// eligible for it. Distinct from `active` (on/off) and from
+  /// ServiceSpecialist (eligibility). Defaults true = shown in search.
+  showInServiceSearch Boolean @default(true)
   createdAt       DateTime @default(now())
 }
 

@@ -8,6 +8,7 @@ import { BrandWordmark } from '@/components/domain/brand-mark';
 import { InitialsAvatar } from '@/components/domain/avatar';
 import { getDataProvider } from '@/lib/data';
 import { prisma } from '@/lib/db';
+import { getEligibleServiceIdsForSpecialist } from '@/lib/data/platform-repo';
 import { cn, formatDateTime } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
 import { BookingForm } from './form';
@@ -25,7 +26,14 @@ export default async function BookPage({
   if (practitionerId) {
     const doctor = await getDataProvider().getPractitionerById(practitionerId);
     if (!doctor) redirect('/doctors');
-    const services = await prisma.service.findMany({ where: { active: true } });
+    // Show only services this specialist is eligible for (unrestricted, or
+    // explicitly linked). Doctor-only services surface here for eligible docs
+    // even though they're hidden from /book/service.
+    const [allActive, eligibleIds] = await Promise.all([
+      prisma.service.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
+      getEligibleServiceIdsForSpecialist(practitionerId),
+    ]);
+    const services = allActive.filter((s) => eligibleIds.has(s.id));
     const color = specialtyColor(doctor.specialty);
 
     return (
@@ -74,8 +82,10 @@ export default async function BookPage({
   }
 
   // Service-first flow — no practitionerId yet; auto-assigned at commit time.
+  // This branch is only reached from /book/service, so a doctor-only service
+  // (hidden from search) shouldn't be bookable here either.
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  if (!service || !service.active) redirect('/book/service');
+  if (!service || !service.active || !service.showInServiceSearch) redirect('/book/service');
 
   return (
     <BookShell backHref="/book/service">

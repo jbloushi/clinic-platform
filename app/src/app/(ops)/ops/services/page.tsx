@@ -22,6 +22,13 @@ async function toggleActive(id: string, active: boolean) {
   revalidatePath('/ops/services');
 }
 
+async function toggleServiceSearch(id: string, showInServiceSearch: boolean) {
+  'use server';
+  await requireStaff(['admin']);
+  await prisma.service.update({ where: { id }, data: { showInServiceSearch } });
+  revalidatePath('/ops/services');
+}
+
 export default async function ServicesPage() {
   const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
 
@@ -64,6 +71,7 @@ export default async function ServicesPage() {
                 <TableHead>Duration</TableHead>
                 <TableHead>Fee</TableHead>
                 <TableHead>Assigned to</TableHead>
+                <TableHead>Search</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -86,6 +94,13 @@ export default async function ServicesPage() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {s.showInServiceSearch ? (
+                        <Badge variant="secondary">In search</Badge>
+                      ) : (
+                        <Badge variant="outline">Doctor-only</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {s.active ? (
                         <Badge variant="secondary">Active</Badge>
                       ) : (
@@ -100,6 +115,11 @@ export default async function ServicesPage() {
                           allSpecialists={specialistOptions}
                           selectedUuids={assignedUuids}
                         />
+                        <form action={async () => { 'use server'; await toggleServiceSearch(s.id, !s.showInServiceSearch); }}>
+                          <Button type="submit" size="sm" variant="ghost">
+                            {s.showInServiceSearch ? 'Hide from search' : 'Show in search'}
+                          </Button>
+                        </form>
                         <form action={async () => { 'use server'; await toggleActive(s.id, !s.active); }}>
                           <Button type="submit" size="sm" variant="ghost">
                             {s.active ? 'Deactivate' : 'Activate'}

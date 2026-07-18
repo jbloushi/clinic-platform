@@ -35,15 +35,21 @@ async function upsertStaff(row: {
   });
 }
 
-async function upsertService(name: string, durationMinutes: number, priceMinor: number) {
+async function upsertService(
+  name: string,
+  durationMinutes: number,
+  priceMinor: number,
+  opts: { showInServiceSearch?: boolean } = {},
+) {
+  const showInServiceSearch = opts.showInServiceSearch ?? true;
   const existing = await prisma.service.findFirst({ where: { name } });
   if (existing) {
     await prisma.service.update({
       where: { id: existing.id },
-      data: { durationMinutes, priceMinor },
+      data: { durationMinutes, priceMinor, showInServiceSearch },
     });
   } else {
-    await prisma.service.create({ data: { name, durationMinutes, priceMinor } });
+    await prisma.service.create({ data: { name, durationMinutes, priceMinor, showInServiceSearch } });
   }
 }
 
@@ -59,7 +65,9 @@ async function main() {
   await upsertService('New consultation', 20, 15000);
   await upsertService('Follow-up visit', 15, 8000);
   await upsertService('Extended consultation', 40, 25000);
-  await upsertService('Procedure (in-clinic)', 60, 40000);
+  // Doctor-only: restricted to Dermatology (see seed-openemr eligibility) and
+  // hidden from the /book/service search — demonstrates the doctor-only flag.
+  await upsertService('Procedure (in-clinic)', 60, 40000, { showInServiceSearch: false });
 
   console.log('Seed complete. Demo staff password:', demoPassword);
   console.log('Emails: reception@clinic.local, doctor@clinic.local, admin@clinic.local, finance@clinic.local');
