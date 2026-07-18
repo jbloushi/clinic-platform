@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("ADAPTER_DATABASE_URL")
 }
 
@@ -14,7 +14,7 @@ datasource db {
 model StaffUser {
   id             String   @id @default(cuid())
   email          String   @unique
-  passwordHash   String
+  passwordHash   String   @db.VarChar(255)
   firstName      String
   lastName       String
   role           String   // reception | doctor | admin | finance
@@ -52,7 +52,7 @@ model SessionLog {
   subject    String   // "staff:<id>" | "patient:<id>"
   event      String   // login | logout | expire
   ip         String?
-  userAgent  String?
+  userAgent  String?  @db.Text
   createdAt  DateTime @default(now())
 }
 
@@ -99,7 +99,7 @@ model BookingHold {
   endAt                 DateTime
   status                String   @default("held") // held | pending_payment | confirmed | cancelled | expired
   openemrAppointmentId  String?  // populated on confirm
-  reason                String?
+  reason                String?  @db.Text
   holdExpiresAt         DateTime
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
@@ -113,7 +113,7 @@ model WalletTransaction {
   amountMinor Int      // + credit, - debit
   currency    String   @default("USD")
   source      String   // consultation_credit | promo | admin_adjustment | payment | refund | expiry
-  reference   String?
+  reference   String?  @db.Text
   expiresAt   DateTime?
   createdBy   String   // staff id or "system"
   createdAt   DateTime @default(now())
@@ -139,7 +139,7 @@ model AuditLog {
   actor     String   // "staff:<id>" | "patient:<id>" | "system"
   action    String   // e.g. "appointment.create", "wallet.adjust"
   target    String?
-  metadata  String?  // JSON string, no PHI
+  metadata  String?  @db.Text // JSON string, no PHI
   createdAt DateTime @default(now())
   @@index([createdAt])
 }
