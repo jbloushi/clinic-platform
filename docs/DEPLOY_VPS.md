@@ -35,10 +35,25 @@ Do this on `clinic.mawthook.io`'s OpenEMR before seeding.
    - `Enable OpenEMR Standard FHIR API` = on
    - `Enable OAuth2 Password Grant` = on (demo only)
    - Set `site_addr_oath` = `https://clinic.mawthook.io` (used to build OAuth URLs)
-2. **Register an OAuth2 client** (dynamic registration), then **enable it**
-   (new clients are disabled by default): Administration → System → **API Clients**.
-   - Redirect URI: `https://book.mawthook.io/api/auth/openemr/callback`
-   - Record `client_id` + `client_secret`.
+2. **Register an OAuth2 client**, then **enable it** (new clients are disabled
+   by default): Administration → System → **API Clients**.
+   - The in-UI "App Registration Form" has a bug that submits an empty `jwks`
+     as a string and fails ("expecting array, got string"). Register via the
+     endpoint instead (it omits `jwks`):
+     ```bash
+     curl -sk -X POST https://clinic.mawthook.io/oauth2/default/registration \
+       -H 'Content-Type: application/json' \
+       -d '{"application_type":"private","client_name":"Clinic Booking App",
+            "token_endpoint_auth_method":"client_secret_post",
+            "redirect_uris":["https://book.mawthook.io/api/auth/openemr/callback"],
+            "scope":"openid offline_access api:oemr api:fhir user/patient.crus user/appointment.cruds user/practitioner.crus user/encounter.crus user/facility.crus user/user.rs user/Patient.rs user/Practitioner.rs user/Appointment.rs user/Encounter.rs user/Condition.rs user/AllergyIntolerance.rs user/MedicationRequest.rs user/Observation.rs user/DocumentReference.rs"}'
+     ```
+   - `application_type:"private"` = confidential (returns a `client_secret`).
+   - Record `client_id` + `client_secret`, then **enable** the client in API Clients.
+   - Scope-name note: this OpenEMR build uses `user/patient.crus` /
+     `user/practitioner.crus` / `user/user.rs` (not `.cruds`). `OPENEMR_SCOPES`
+     in the app env must match the registered scopes exactly, or the token call
+     returns `invalid_scope`.
 3. **Create a least-privileged API service user** (or reuse `clinic-admin`) for
    the password grant; record its username/password.
 4. **Find the facility + calendar-category IDs the seed needs.** A fresh install
@@ -50,6 +65,41 @@ Do this on `clinic.mawthook.io`'s OpenEMR before seeding.
      WHERE pc_catname LIKE '%Office%';                    -- office-visit category id
    ```
    Note these for `SEED_FACILITY_ID` / `SEED_OFFICE_VISIT_CATID` below.
+
+### 1a. Web-server gotchas if OpenEMR is behind nginx (aaPanel)
+
+OpenEMR ships Apache `.htaccess` rewrites for its API paths; **nginx ignores
+`.htaccess`**, so `/apis/` and `/oauth2/` 404 with an HTML page (which then
+shows up as `Unexpected token '<' ... is not valid JSON`). Add these to the
+OpenEMR site's nginx `server { }` block, **after** the `include enable-php-*.conf;`
+line so the PHP location matches first:
+
+```nginx
+# REST + FHIR — dispatch.php reads the route from REQUEST_URI, so a plain fallback works
+location ~ ^/apis/ {
+    try_files $uri $uri/ /apis/dispatch.php?$query_string;
+}
+# OAuth2 — authorize.php REQUIRES the path as _REWRITE_COMMAND (a plain fallback
+# yields "Cannot assign null to property ... $grantType")
+location ~ ^/oauth2/(?<oauth_path>.*)$ {
+    try_files $uri /oauth2/authorize.php?_REWRITE_COMMAND=$oauth_path&$args;
+}
+```
+
+Then two things that otherwise corrupt every JSON response:
+- **`display_errors` must be Off.** OpenEMR calls `ini_set('display_errors', 1)`
+  at runtime, so a php.ini setting isn't enough — force it at admin level in the
+  **FPM pool** (scripts can't override this):
+  ```
+  # /www/server/php/83/etc/php-fpm.d/www.conf
+  php_admin_value[display_errors] = Off
+  ```
+  then restart FPM (`service php-fpm-83 restart`). Otherwise PHP warnings prepend
+  to responses and break `res.json()` in the app.
+
+Verify both: `curl -sk https://clinic.mawthook.io/apis/default/fhir/metadata | head -c 60`
+must start with `{"resourceType":"CapabilityStatement"` (no `<br/>`/`Warning`),
+and the password-grant token call (§1) must return an `access_token`.
 
 ---
 
