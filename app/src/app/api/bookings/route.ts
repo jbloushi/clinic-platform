@@ -18,6 +18,9 @@ const bodySchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   mobile: z.string().min(6),
+  // 'card' = mock online payment (marked paid). 'cash' = pay at clinic (COD) —
+  // slot is reserved now, payment recorded as pending.
+  paymentMethod: z.enum(['card', 'cash']).default('card'),
 });
 
 export async function POST(req: NextRequest) {
@@ -134,14 +137,16 @@ export async function POST(req: NextRequest) {
 
   booking = await prisma.bookingHold.update({ where: { id: booking.id }, data: { openemrAppointmentId } });
 
+  // Pay-at-clinic (COD) records a pending cash payment; online mock pay marks it succeeded.
+  const isCash = parsed.data.paymentMethod === 'cash';
   await prisma.payment.create({
     data: {
       bookingHoldId: booking.id,
       patientId: identity.id,
       amountMinor: service.priceMinor,
       currency: service.currency,
-      method: 'card_mock',
-      status: 'succeeded',
+      method: isCash ? 'cash' : 'card_mock',
+      status: isCash ? 'pending' : 'succeeded',
     },
   });
 
@@ -150,7 +155,7 @@ export async function POST(req: NextRequest) {
       actor: `patient:${identity.id}`,
       action: 'booking.confirmed',
       target: booking.id,
-      metadata: JSON.stringify({ openemrAppointmentId, practitionerId }),
+      metadata: JSON.stringify({ openemrAppointmentId, practitionerId, paymentMethod: parsed.data.paymentMethod }),
     },
   });
 

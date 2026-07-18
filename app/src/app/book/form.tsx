@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CheckCircle2, CreditCard, Lock, ShieldCheck } from 'lucide-react';
+import { Banknote, CheckCircle2, CreditCard, Lock, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,7 @@ export function BookingForm({
   const [reason, setReason] = useState('');
   const [code, setCode] = useState('');
   const [serviceId, setServiceId] = useState(services[0]?.id ?? '');
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'cash'>('card');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -106,6 +107,7 @@ export function BookingForm({
           firstName,
           lastName,
           mobile,
+          paymentMethod,
         }),
       });
       const data = await res.json();
@@ -278,11 +280,54 @@ export function BookingForm({
               </div>
             </CardContent>
           </Card>
+          <div className="space-y-2">
+            <Label>Payment</Label>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('card')}
+                aria-pressed={paymentMethod === 'card'}
+                className={`flex items-center gap-3 rounded-md border p-3 text-left transition-all press-scale ${
+                  paymentMethod === 'card' ? 'border-primary bg-primary/5 ring-1 ring-primary/40' : 'hover:border-primary/40'
+                }`}
+              >
+                <CreditCard className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                <span>
+                  <span className="block text-sm font-medium">Pay online</span>
+                  <span className="block text-xs text-muted-foreground">Card (demo)</span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cash')}
+                aria-pressed={paymentMethod === 'cash'}
+                className={`flex items-center gap-3 rounded-md border p-3 text-left transition-all press-scale ${
+                  paymentMethod === 'cash' ? 'border-primary bg-primary/5 ring-1 ring-primary/40' : 'hover:border-primary/40'
+                }`}
+              >
+                <Banknote className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                <span>
+                  <span className="block text-sm font-medium">Pay at clinic</span>
+                  <span className="block text-xs text-muted-foreground">Cash on arrival</span>
+                </span>
+              </button>
+            </div>
+          </div>
           <Card className="border-dashed">
             <CardContent className="flex items-center gap-3 pt-6 text-sm text-muted-foreground">
-              <CreditCard className="h-4 w-4" aria-hidden />
-              Mock payment for the demo. In production this is a secure card checkout.
-              <ShieldCheck className="ml-auto h-4 w-4 text-emerald-600" aria-hidden />
+              {paymentMethod === 'card' ? (
+                <>
+                  <CreditCard className="h-4 w-4" aria-hidden />
+                  Mock payment for the demo. In production this is a secure card checkout.
+                  <ShieldCheck className="ml-auto h-4 w-4 text-emerald-600" aria-hidden />
+                </>
+              ) : (
+                <>
+                  <Banknote className="h-4 w-4" aria-hidden />
+                  Pay {formatCurrency(feeMinor, currency)} in cash when you arrive. Your slot is reserved now.
+                  <ShieldCheck className="ml-auto h-4 w-4 text-emerald-600" aria-hidden />
+                </>
+              )}
             </CardContent>
           </Card>
           {error && (
@@ -293,10 +338,15 @@ export function BookingForm({
           <Button onClick={pay} size="lg" className="w-full" disabled={loading}>
             {loading ? (
               'Confirming…'
-            ) : (
+            ) : paymentMethod === 'card' ? (
               <>
                 <Lock className="mr-1 h-4 w-4" />
                 Pay {formatCurrency(feeMinor, currency)} &amp; confirm
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="mr-1 h-4 w-4" />
+                Reserve &amp; pay at clinic
               </>
             )}
           </Button>
