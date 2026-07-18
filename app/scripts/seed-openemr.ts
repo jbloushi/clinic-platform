@@ -20,8 +20,12 @@ import { randomBytes, scryptSync } from 'node:crypto';
 
 const prisma = new PrismaClient();
 
-const FACILITY_ID = 3;
-const CAT_OFFICE_VISIT = 5;
+// Facility + calendar-category IDs default to a stock OpenEMR install's values
+// (facility 3 = "Your Clinic Name", category 5 = "Office Visit"). A different
+// target instance (e.g. the VPS) may assign different IDs — verify on that
+// OpenEMR first and override via env. See the deployment runbook (Phase D).
+const FACILITY_ID = Number(process.env.SEED_FACILITY_ID ?? 3);
+const CAT_OFFICE_VISIT = Number(process.env.SEED_OFFICE_VISIT_CATID ?? 5);
 
 // ----------------------------------------------------------------------------
 // Deterministic PRNG so re-runs produce the same clinic.
