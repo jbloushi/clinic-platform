@@ -1,21 +1,14 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
 
 export const metadata: Metadata = {
   metadataBase: new URL('http://localhost:3000'),
   title: {
-    default: 'Clinic Platform',
-    template: '%s · Clinic Platform',
+    default: 'Dr. Al Jarallah Clinic',
+    template: '%s · Dr. Al Jarallah Clinic',
   },
   description:
-    'Modern clinic operating platform — book specialists, run operations, and provide care, powered by OpenEMR.',
+    'Book specialist medical care at Dr. Al Jarallah Clinic in Hawally and Jahra, Kuwait.',
   icons: {
     icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
   },
@@ -29,7 +22,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en">
       <body className="min-h-screen font-sans antialiased">{children}</body>
     </html>
   );

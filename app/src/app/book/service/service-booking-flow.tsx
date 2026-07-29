@@ -115,7 +115,7 @@ function AggregatedSlotPicker({
   }, [slots]);
 
   const today = new Date().toISOString().slice(0, 10);
-  const daySlots = byDate.get(selectedDate) ?? [];
+  const daySlots = useMemo(() => byDate.get(selectedDate) ?? [], [byDate, selectedDate]);
   const buckets = useMemo(() => bucketSlots(daySlots), [daySlots]);
 
   function shift(deltaDays: number) {
