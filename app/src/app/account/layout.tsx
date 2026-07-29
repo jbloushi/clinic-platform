@@ -9,7 +9,7 @@ export default async function AccountLayout({ children }: { children: React.Reac
   const name = patient.firstName ? `${patient.firstName} ${patient.lastName ?? ''}`.trim() : patient.mobile;
 
   return (
-    <div className="min-h-screen pb-20 sm:pb-0">
+    <div className="min-h-screen pb-24 sm:pb-0">
       <header className="sticky top-0 z-30 border-b bg-card/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <Link href="/" aria-label="Home">

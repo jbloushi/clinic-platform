@@ -4,42 +4,48 @@
 
 @layer base {
   :root {
-    /* Neutral surface — clean, calm medical SaaS */
-    --background: 210 40% 98.5%;
-    --foreground: 222 32% 12%;
+    /* Dr. Al Jarallah Clinic — warm regional medical palette */
+    --background: 43 33% 94%;
+    --foreground: 172 44% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 222 32% 12%;
+    --card-foreground: 172 44% 14%;
+    --surface: 0 0% 100%;
+    --surface-soft: 48 33% 97%;
+    --canvas: 42 20% 88%;
 
-    /* Soft-blue → navy primary */
-    --primary: 217 90% 55%;
+    --primary: 174 79% 20%;
     --primary-foreground: 0 0% 100%;
+    --primary-dark: 175 78% 15%;
 
-    --secondary: 214 32% 95%;
-    --secondary-foreground: 222 32% 16%;
+    --secondary: 48 28% 91%;
+    --secondary-foreground: 172 44% 14%;
 
-    --muted: 214 32% 96%;
-    --muted-foreground: 222 12% 42%;
+    --muted: 45 28% 91%;
+    --muted-foreground: 163 7% 45%;
 
-    --accent: 214 32% 94%;
-    --accent-foreground: 222 32% 12%;
+    --accent: 42 51% 50%;
+    --accent-foreground: 41 51% 36%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 90%;
-    --input: 220 15% 90%;
-    --ring: 217 90% 55%;
+    --border: 43 19% 86%;
+    --divider: 42 15% 79%;
+    --input: 43 19% 86%;
+    --ring: 174 79% 20%;
 
-    --radius: 0.625rem;
+    --radius: 0.875rem;
 
     /* Booking status colors — single source of truth */
     --status-held: 38 92% 50%;
-    --status-pending: 32 95% 44%;
-    --status-confirmed: 217 90% 55%;
-    --status-checkedin: 173 80% 40%;
-    --status-completed: 142 71% 45%;
-    --status-cancelled: 220 10% 55%;
-    --status-noshow: 0 72% 51%;
+    --status-pending: 42 51% 50%;
+    --status-confirmed: 174 79% 20%;
+    --status-checkedin: 174 58% 30%;
+    --status-completed: 145 46% 33%;
+    --status-cancelled: 165 5% 52%;
+    --status-noshow: 0 61% 45%;
+    --status-critical: 0 61% 45%;
+    --status-warning: 42 51% 50%;
 
     /* Motion tokens */
     --motion-fast: 120ms;
@@ -63,6 +69,11 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: 'ss01' on, 'cv11' on;
+  }
+  h1,
+  h2,
+  .font-editorial {
+    font-family: 'Source Serif 4', 'Noto Naskh Arabic', 'Geeza Pro', Georgia, serif;
   }
 
   /* Tabular numerals on data — keeps stats & tables aligned */
@@ -115,8 +126,12 @@
   /* Reusable soft-background glow for hero sections */
   .glow-radial {
     background:
-      radial-gradient(50% 60% at 15% 0%, hsl(var(--primary) / 0.10), transparent 70%),
-      radial-gradient(45% 55% at 85% 0%, hsl(173 80% 55% / 0.08), transparent 70%);
+      radial-gradient(50% 60% at 15% 0%, hsl(var(--accent) / 0.13), transparent 70%),
+      linear-gradient(145deg, hsl(var(--primary-dark)), hsl(var(--primary)));
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .card-hover {

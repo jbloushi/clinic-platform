@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarDays, Menu, Phone, ShieldCheck } from 'lucide-react';
+import { CalendarDays, Languages, Menu, Phone, ShieldCheck } from 'lucide-react';
 import { BrandWordmark } from './brand-mark';
 import { Button } from '@/components/ui/button';
 
@@ -15,7 +15,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
 }
 
 export function PublicHeader() {
-  return <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur"><div className="mx-auto flex h-16 max-w-6xl items-center gap-4 px-4"><Link href="/" aria-label="Dr. Al Jarallah Clinic home"><BrandWordmark /></Link><nav className="ms-auto hidden items-center gap-1 md:flex" aria-label="Main navigation">{nav.map((item) => <Button key={item.href} asChild variant="ghost" size="sm"><Link href={item.href}>{item.label}</Link></Button>)}</nav><Button asChild size="sm" className="ms-auto md:ms-2"><Link href="/book"><CalendarDays />Book appointment</Link></Button><details className="relative md:hidden"><summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-md border" aria-label="Open navigation"><Menu className="h-5 w-5" /></summary><nav className="absolute end-0 top-12 w-56 rounded-lg border bg-card p-2 shadow-lg" aria-label="Mobile navigation">{nav.map((item) => <Link key={item.href} href={item.href} className="block min-h-11 rounded-md px-3 py-3 text-sm font-medium hover:bg-accent">{item.label}</Link>)}</nav></details></div></header>;
+  return <header className="sticky top-0 z-40 border-b bg-surface-soft/95 backdrop-blur"><div className="mx-auto flex min-h-16 max-w-6xl items-center gap-3 px-4 py-2"><Link href="/" aria-label="Dr. Al Jarallah Clinic home"><BrandWordmark /></Link><nav className="ms-auto hidden items-center gap-1 md:flex" aria-label="Main navigation">{nav.map((item) => <Button key={item.href} asChild variant="ghost" size="sm"><Link href={item.href}>{item.label}</Link></Button>)}</nav><Button variant="ghost" size="sm" className="ms-auto min-h-11 px-2 md:ms-1" aria-label="Switch to Arabic"><Languages /><span className="hidden lg:inline">العربية</span></Button><Button asChild size="sm" className="hidden sm:inline-flex"><Link href="/book"><CalendarDays />Book appointment</Link></Button><details className="relative md:hidden"><summary className="flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-md border" aria-label="Open navigation"><Menu className="h-5 w-5" /></summary><nav className="absolute end-0 top-12 w-64 rounded-lg border bg-card p-2 shadow-lg" aria-label="Mobile navigation"><Link href="/book" className="mb-1 flex min-h-11 items-center gap-2 rounded-md bg-primary px-3 py-3 text-sm font-semibold text-primary-foreground"><CalendarDays className="h-4 w-4" />Book appointment</Link>{nav.map((item) => <Link key={item.href} href={item.href} className="block min-h-11 rounded-md px-3 py-3 text-sm font-medium hover:bg-muted">{item.label}</Link>)}</nav></details></div></header>;
 }
 
 export function PublicFooter() {

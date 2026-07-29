@@ -34,6 +34,11 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        surface: {
+          DEFAULT: 'hsl(var(--surface))',
+          soft: 'hsl(var(--surface-soft))',
+        },
+        canvas: 'hsl(var(--canvas))',
         // Status colors — single source of truth for StatusBadge
         status: {
           held: 'hsl(var(--status-held))',
@@ -51,7 +56,8 @@ const config: Config = {
         sm: 'calc(var(--radius) - 4px)',
       },
       fontFamily: {
-        sans: ['Inter', 'Noto Sans Arabic', 'Segoe UI', 'Arial', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans', 'Noto Sans Arabic', 'Segoe UI', 'Arial', 'system-ui', 'sans-serif'],
+        editorial: ['Source Serif 4', 'Noto Naskh Arabic', 'Geeza Pro', 'Georgia', 'serif'],
       },
     },
   },

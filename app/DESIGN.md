@@ -5,10 +5,11 @@ system itself.** Tokens live in `src/app/globals.css`; component conventions bel
 
 ## Palette
 
-- **Primary**: blue `hsl(217 90% 55%)` — deliberate. Blue is the correct register for a medical
-  booking product; do NOT churn it in a "colorize" pass. The point of view comes from the
-  **specialty color system** (`src/lib/specialty-colors.ts`): 8 calm hues, deterministic per
-  specialty, applied as avatar-gradient + pill + dot together (never mix sets).
+- **Primary**: deep clinic teal `#0B5C55`; dark teal `#08423D`; gold accent `#C0983F`.
+- **Surfaces**: warm page `#F4F1EA`, warm canvas `#E7E3DA`, white and soft-white cards.
+- **Text**: deep green-black `#143430`; muted copy `#6B7A76`.
+- The approved teal/gold/warm-sand direction supersedes the original blue planning palette.
+- The specialty color system may distinguish specialties, but it must not override clinic chrome.
 - **Status colors** (appointments): single source in globals.css `--status-*` vars, rendered only
   via `StatusBadge` (`components/domain/status-badge.tsx`). Never inline appointment-status colors.
 - Semantic tokens only in components (`bg-primary`, `text-muted-foreground`, `border-border`…).
@@ -17,7 +18,8 @@ system itself.** Tokens live in `src/app/globals.css`; component conventions bel
 
 ## Type
 
-- Font: Inter (variable, `--font-inter`), antialiased, `cv02/cv03/cv04/cv11` features on.
+- Major headings, doctor names, dates, and prices: Source Serif 4 with Arabic editorial fallbacks.
+- Navigation, labels, forms, tables, and body: IBM Plex Sans with Arabic sans fallbacks.
 - Scale in use: 11px labels (uppercase, tracking-wide) · 13px nav · 14px body (`text-sm`) ·
   15–16px card titles · 22–24px page titles (`PageHeader`) · 36–48px landing hero only.
 - Numbers in tables/prices/times: always `tabular-nums` (globally applied to th/td; add the class
@@ -27,8 +29,7 @@ system itself.** Tokens live in `src/app/globals.css`; component conventions bel
 ## Spacing & shape
 
 - 4px grid. Card padding `p-5`/`p-6`; section gaps `space-y-6`; page shell `max-w-6xl px-4`.
-- **Radius: `rounded-lg` (via `--radius: 0.625rem`) for cards/inputs/buttons; `rounded-full` for
-  pills/avatars/dots. Nothing else.** (`rounded-2xl`/`rounded-xl` are deviations — remove on sight.)
+- Card radius is 14–16px; controls are 11–12px; pills remain fully rounded.
 - Elevation: `shadow-sm` resting, `shadow-md` on `.card-hover` hover. No heavier shadows.
 
 ## Motion

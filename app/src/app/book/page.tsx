@@ -20,14 +20,14 @@ export default async function BookPage({
 }: {
   searchParams: Promise<{ practitionerId?: string; serviceId?: string; service?: string; department?: string; branch?: string; start?: string; end?: string }>;
 }) {
-  const { practitionerId, serviceId, service, department, start, end } = await searchParams;
+  const { practitionerId, serviceId, service, department, branch, start, end } = await searchParams;
   if ((!start || !end) && (serviceId || service)) {
     redirect(`/book/service?service=${encodeURIComponent(serviceId ?? service ?? '')}${department ? `&department=${encodeURIComponent(department)}` : ''}`);
   }
   if (!start || !end || (!practitionerId && !serviceId)) {
     return (
       <BookShell backHref="/" entry>
-        <BookingEntry initialDepartment={department} />
+        <BookingEntry initialDepartment={department} initialBranch={branch} />
       </BookShell>
     );
   }

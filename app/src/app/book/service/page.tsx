@@ -8,8 +8,8 @@ import { ServiceBookingFlow } from './service-booking-flow';
 
 export const dynamic = 'force-dynamic';
 
-export default async function BookByServicePage({ searchParams }: { searchParams: Promise<{ service?: string; department?: string; preference?: string }> }) {
-  const { service: selectedServiceId, department, preference } = await searchParams;
+export default async function BookByServicePage({ searchParams }: { searchParams: Promise<{ service?: string; department?: string; branch?: string; preference?: string }> }) {
+  const { service: selectedServiceId, department, branch, preference } = await searchParams;
   const allServices = await listBookableServices({ onlineOnly: true });
   const departmentServiceIds = department
     ? new Set(publicServices.filter((service) => service.departmentSlug === department).map((service) => service.slug))
@@ -46,6 +46,7 @@ export default async function BookByServicePage({ searchParams }: { searchParams
           }))}
           initialServiceId={selectedServiceId}
           preferFirstAvailable={preference === 'first'}
+          branch={branch}
         />
       </main>
     </div>

@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 
 /**
- * The clinic mark — a small gradient tile with a plus glyph.
+ * Reusable clinic monogram used until an approved logo asset is supplied.
  * Used in the sidebar header and the public marketing pages.
  */
 export function BrandMark({ className, size = 32 }: { className?: string; size?: number }) {
@@ -9,15 +9,12 @@ export function BrandMark({ className, size = 32 }: { className?: string; size?:
     <span
       aria-hidden
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-lg text-white shadow-sm',
-        'bg-gradient-to-br from-primary to-blue-700',
+        'inline-flex shrink-0 items-center justify-center rounded-lg border border-white/15 bg-primary text-white shadow-sm',
         className,
       )}
       style={{ width: size, height: size }}
     >
-      <svg viewBox="0 0 24 24" width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} fill="none">
-        <path d="M12 4v16M4 12h16" stroke="currentColor" strokeWidth="2.75" strokeLinecap="round" />
-      </svg>
+      <span className="font-editorial text-[0.72em] font-semibold leading-none">AJ</span>
     </span>
   );
 }
@@ -26,7 +23,10 @@ export function BrandWordmark({ className }: { className?: string }) {
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
       <BrandMark size={28} />
-      <span className="text-[15px] font-semibold tracking-tight text-foreground">Clinic</span>
+      <span className="leading-tight">
+        <span className="block font-editorial text-[15px] font-semibold tracking-tight text-foreground">Dr. Al Jarallah Clinic</span>
+        <span className="hidden text-[10px] text-muted-foreground sm:block">Specialist care · Kuwait</span>
+      </span>
     </span>
   );
 }

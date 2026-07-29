@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowRight, Clock, Star } from 'lucide-react';
+import { ArrowRight, Clock } from 'lucide-react';
 import { InitialsAvatar } from './avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,18 +8,13 @@ import { specialtyColor } from '@/lib/specialty-colors';
 import {
   availabilityTone,
   formatSpecialistRole,
-  specialistLanguages,
-  specialistRating,
-  specialistVisitMode,
 } from '@/lib/specialist-meta';
 import type { NextAvailable } from '@/lib/specialist-meta';
 import type { Practitioner } from '@/lib/data/types';
 
 /**
- * Specialist card — matches the Claude Design spec:
- * avatar with availability dot, name + specialty pill + rating, bio,
- * attribute chips (role / visit mode / insurance / languages), a next-available bar,
- * and a consultation-fee + Book footer.
+ * Public specialist summary using only authoritative practitioner fields:
+ * identity, specialty, configured role/bio/fee, and provider-derived availability.
  *
  * Note: the underlying data type stays `Practitioner` (that's what OpenEMR/FHIR
  * call the entity). The UI vocabulary is "specialist" because the roster
@@ -37,12 +32,7 @@ export function SpecialistCard({
   const tone = availabilityTone(nextAvailable);
   const nextAvailableLabel = nextAvailable?.label;
   const roleLabel = formatSpecialistRole(specialist.role);
-  const chips = [
-    ...(roleLabel ? [roleLabel] : []),
-    specialistVisitMode(specialist.id),
-    'Accepts insurance',
-    specialistLanguages(specialist.id),
-  ];
+  const chips = roleLabel ? [roleLabel] : [];
 
   return (
     <Card className="card-hover flex flex-col overflow-hidden">
@@ -62,7 +52,7 @@ export function SpecialistCard({
             />
           </div>
           <div className="min-w-0 flex-1">
-            <h3 className="truncate text-[16px] font-semibold leading-tight tracking-tight">{fullName}</h3>
+            <h3 className="truncate font-editorial text-[18px] font-semibold leading-tight tracking-tight">{fullName}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
               <span
                 className={cn(
@@ -73,10 +63,6 @@ export function SpecialistCard({
                 <span className={cn('h-1.5 w-1.5 rounded-full', color.dot)} />
                 {specialist.specialty}
               </span>
-              <span className="inline-flex items-center gap-1 text-xs font-semibold text-foreground">
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" aria-hidden />
-                {specialistRating(specialist.id)}
-              </span>
             </div>
           </div>
         </div>
@@ -85,7 +71,7 @@ export function SpecialistCard({
         {specialist.bio && <p className="line-clamp-2 text-sm leading-relaxed text-muted-foreground">{specialist.bio}</p>}
 
         {/* Attribute chips */}
-        <div className="flex flex-wrap gap-1.5">
+        {chips.length > 0 && <div className="flex flex-wrap gap-1.5">
           {chips.map((c) => (
             <span
               key={c}
@@ -94,7 +80,7 @@ export function SpecialistCard({
               {c}
             </span>
           ))}
-        </div>
+        </div>}
 
         {/* Next available */}
         {nextAvailableLabel && (
@@ -110,7 +96,7 @@ export function SpecialistCard({
         <div className="mt-auto flex items-center justify-between border-t pt-4">
           <div>
             <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Consultation</p>
-            <p className="text-lg font-semibold tabular-nums">
+            <p className="font-editorial text-lg font-semibold tabular-nums">
               {formatCurrency(specialist.consultationFeeMinor, specialist.currency)}
             </p>
           </div>

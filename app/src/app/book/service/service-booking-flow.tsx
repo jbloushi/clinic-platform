@@ -16,13 +16,13 @@ type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMino
  * chosen here — /api/services/[id]/slots strips practitionerId, and the
  * actual assignment happens server-side at commit (/api/bookings).
  */
-export function ServiceBookingFlow({ services, initialServiceId, preferFirstAvailable = false }: { services: ServiceOpt[]; initialServiceId?: string; preferFirstAvailable?: boolean }) {
+export function ServiceBookingFlow({ services, initialServiceId, preferFirstAvailable = false, branch }: { services: ServiceOpt[]; initialServiceId?: string; preferFirstAvailable?: boolean; branch?: string }) {
   const [selectedService, setSelectedService] = useState<ServiceOpt | null>(() => services.find((service) => service.id === initialServiceId) ?? (preferFirstAvailable ? services[0] ?? null : null));
 
   if (!selectedService) {
     return <ServicePicker services={services} onSelect={setSelectedService} />;
   }
-  return <AggregatedSlotPicker service={selectedService} onChangeService={() => setSelectedService(null)} />;
+  return <AggregatedSlotPicker service={selectedService} branch={branch} onChangeService={() => setSelectedService(null)} />;
 }
 
 function ServicePicker({
@@ -63,9 +63,11 @@ function ServicePicker({
 
 function AggregatedSlotPicker({
   service,
+  branch,
   onChangeService,
 }: {
   service: ServiceOpt;
+  branch?: string;
   onChangeService: () => void;
 }) {
   const [weekStart, setWeekStart] = useState(() => new Date().toISOString().slice(0, 10));
@@ -238,7 +240,7 @@ function AggregatedSlotPicker({
                         return (
                           <Link
                             key={s.start}
-                            href={`/book?serviceId=${service.id}&start=${encodeURIComponent(s.start)}&end=${encodeURIComponent(s.end)}`}
+                            href={`/book?serviceId=${service.id}&start=${encodeURIComponent(s.start)}&end=${encodeURIComponent(s.end)}${branch ? `&branch=${encodeURIComponent(branch)}` : ''}`}
                             className="flex h-10 items-center justify-center rounded-md border bg-card text-sm font-medium tabular-nums text-foreground press-scale hover:border-primary hover:bg-primary hover:text-primary-foreground hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
                             {label}
