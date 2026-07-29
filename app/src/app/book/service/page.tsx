@@ -2,16 +2,19 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/domain/page-header';
 import { BrandWordmark } from '@/components/domain/brand-mark';
-import { prisma } from '@/lib/db';
+import { listBookableServices } from '@/lib/data/service-catalog';
+import { services as publicServices } from '@/lib/clinic-catalog';
 import { ServiceBookingFlow } from './service-booking-flow';
 
 export const dynamic = 'force-dynamic';
 
-export default async function BookByServicePage() {
-  const services = await prisma.service.findMany({
-    where: { active: true, showInServiceSearch: true },
-    orderBy: { name: 'asc' },
-  });
+export default async function BookByServicePage({ searchParams }: { searchParams: Promise<{ service?: string; department?: string; preference?: string }> }) {
+  const { service: selectedServiceId, department, preference } = await searchParams;
+  const allServices = await listBookableServices({ onlineOnly: true });
+  const departmentServiceIds = department
+    ? new Set(publicServices.filter((service) => service.departmentSlug === department).map((service) => service.slug))
+    : null;
+  const services = departmentServiceIds ? allServices.filter((service) => departmentServiceIds.has(service.id)) : allServices;
 
   return (
     <div className="min-h-screen">
@@ -41,6 +44,8 @@ export default async function BookByServicePage() {
             priceMinor: s.priceMinor,
             currency: s.currency,
           }))}
+          initialServiceId={selectedServiceId}
+          preferFirstAvailable={preference === 'first'}
         />
       </main>
     </div>

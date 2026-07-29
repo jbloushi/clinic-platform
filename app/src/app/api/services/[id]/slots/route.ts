@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
 import { getDataProvider } from '@/lib/data';
-import { getServiceSpecialistUuids } from '@/lib/data/platform-repo';
+import { getBookableService, getServiceSpecialistIds } from '@/lib/data/service-catalog';
 import type { Slot } from '@/lib/data/types';
 
 /**
@@ -20,13 +19,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // This endpoint backs the service-search flow only, so doctor-only services
   // (showInServiceSearch=false) are rejected here too — defense in depth
   // against reaching a hidden service by direct URL.
-  const service = await prisma.service.findUnique({ where: { id } });
+  const service = await getBookableService(id);
   if (!service || !service.active || !service.showInServiceSearch) {
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
   const provider = getDataProvider();
-  const configuredUuids = await getServiceSpecialistUuids(id);
+  const configuredUuids = await getServiceSpecialistIds(id);
   const eligibleUuids = configuredUuids.length > 0
     ? configuredUuids
     : (await provider.getPractitioners({ activeOnly: true })).map((practitioner) => practitioner.id);

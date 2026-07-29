@@ -7,21 +7,30 @@ import { PageHeader } from '@/components/domain/page-header';
 import { BrandWordmark } from '@/components/domain/brand-mark';
 import { InitialsAvatar } from '@/components/domain/avatar';
 import { getDataProvider } from '@/lib/data';
-import { prisma } from '@/lib/db';
-import { getEligibleServiceIdsForSpecialist } from '@/lib/data/platform-repo';
+import { getBookableService, getEligibleServicesForSpecialist } from '@/lib/data/service-catalog';
 import { cn, formatDateTime } from '@/lib/utils';
 import { specialtyColor } from '@/lib/specialty-colors';
 import { BookingForm } from './form';
+import { BookingEntry } from './booking-entry';
 
 export const dynamic = 'force-dynamic';
 
 export default async function BookPage({
   searchParams,
 }: {
-  searchParams: Promise<{ practitionerId?: string; serviceId?: string; start?: string; end?: string }>;
+  searchParams: Promise<{ practitionerId?: string; serviceId?: string; service?: string; department?: string; branch?: string; start?: string; end?: string }>;
 }) {
-  const { practitionerId, serviceId, start, end } = await searchParams;
-  if (!start || !end || (!practitionerId && !serviceId)) redirect('/doctors');
+  const { practitionerId, serviceId, service, department, start, end } = await searchParams;
+  if ((!start || !end) && (serviceId || service)) {
+    redirect(`/book/service?service=${encodeURIComponent(serviceId ?? service ?? '')}${department ? `&department=${encodeURIComponent(department)}` : ''}`);
+  }
+  if (!start || !end || (!practitionerId && !serviceId)) {
+    return (
+      <BookShell backHref="/" entry>
+        <BookingEntry initialDepartment={department} />
+      </BookShell>
+    );
+  }
 
   if (practitionerId) {
     const doctor = await getDataProvider().getPractitionerById(practitionerId);
@@ -29,11 +38,7 @@ export default async function BookPage({
     // Show only services this specialist is eligible for (unrestricted, or
     // explicitly linked). Doctor-only services surface here for eligible docs
     // even though they're hidden from /book/service.
-    const [allActive, eligibleIds] = await Promise.all([
-      prisma.service.findMany({ where: { active: true }, orderBy: { name: 'asc' } }),
-      getEligibleServiceIdsForSpecialist(practitionerId),
-    ]);
-    const services = allActive.filter((s) => eligibleIds.has(s.id));
+    const services = await getEligibleServicesForSpecialist(practitionerId);
     const color = specialtyColor(doctor.specialty);
 
     return (
@@ -84,8 +89,8 @@ export default async function BookPage({
   // Service-first flow — no practitionerId yet; auto-assigned at commit time.
   // This branch is only reached from /book/service, so a doctor-only service
   // (hidden from search) shouldn't be bookable here either.
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  if (!service || !service.active || !service.showInServiceSearch) redirect('/book/service');
+  const selectedService = await getBookableService(serviceId!);
+  if (!selectedService || !selectedService.active || !selectedService.showInServiceSearch) redirect('/book/service');
 
   return (
     <BookShell backHref="/book/service">
@@ -96,7 +101,7 @@ export default async function BookPage({
               <Users className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{service.name}</p>
+              <p className="truncate text-sm font-semibold">{selectedService.name}</p>
               <span className="mt-0.5 inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                 Any available specialist
               </span>
@@ -112,14 +117,14 @@ export default async function BookPage({
       <BookingForm
         start={start}
         end={end}
-        consultationFeeMinor={service.priceMinor}
-        currency={service.currency}
+        consultationFeeMinor={selectedService.priceMinor}
+        currency={selectedService.currency}
         services={[
           {
-            id: service.id,
-            name: service.name,
-            durationMinutes: service.durationMinutes,
-            priceMinor: service.priceMinor,
+            id: selectedService.id,
+            name: selectedService.name,
+            durationMinutes: selectedService.durationMinutes,
+            priceMinor: selectedService.priceMinor,
           },
         ]}
       />
@@ -127,7 +132,7 @@ export default async function BookPage({
   );
 }
 
-function BookShell({ backHref, children }: { backHref: string; children: React.ReactNode }) {
+function BookShell({ backHref, children, entry = false }: { backHref: string; children: React.ReactNode; entry?: boolean }) {
   return (
     <div className="min-h-screen">
       <header className="border-b bg-card/70 backdrop-blur-md">
@@ -147,8 +152,8 @@ function BookShell({ backHref, children }: { backHref: string; children: React.R
 
         <PageHeader
           eyebrow="Book appointment"
-          title="Confirm your appointment"
-          description="A few details and you're set."
+          title={entry ? 'Let’s find the right appointment' : 'Confirm your appointment'}
+          description={entry ? 'Start with a service, department, doctor, or the earliest suitable time.' : "A few details and you're set."}
         />
 
         {children}

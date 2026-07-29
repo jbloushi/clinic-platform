@@ -4,7 +4,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { getDataProvider } from '@/lib/data';
 import { normalizeMobile } from '@/lib/auth/mobile';
-import { getEligibleServiceIdsForSpecialist, getServiceSpecialistUuids } from '@/lib/data/platform-repo';
+import { getBookableService, getEligibleServicesForSpecialist, getServiceSpecialistIds } from '@/lib/data/service-catalog';
 
 const bodySchema = z.object({
   // Omitted from /book/service — the specialist is auto-assigned server-side
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
 
   const mobile = normalizeMobile(parsed.data.mobile);
-  const service = await prisma.service.findUnique({ where: { id: parsed.data.serviceId } });
+  const service = await getBookableService(parsed.data.serviceId);
   if (!service) return NextResponse.json({ error: 'invalid_service' }, { status: 400 });
 
   const dp = getDataProvider();
@@ -71,13 +71,13 @@ export async function POST(req: NextRequest) {
   // (defense in depth — the UI already filters the list, but a stale/crafted
   // request shouldn't book a doctor for a service they can't perform).
   if (parsed.data.practitionerId) {
-    const eligibleServiceIds = await getEligibleServiceIdsForSpecialist(parsed.data.practitionerId);
-    if (!eligibleServiceIds.has(service.id)) {
+    const eligibleServices = await getEligibleServicesForSpecialist(parsed.data.practitionerId);
+    if (!eligibleServices.some((eligibleService) => eligibleService.id === service.id)) {
       return NextResponse.json({ error: 'service_not_eligible' }, { status: 400 });
     }
   }
 
-  const configuredUuids = await getServiceSpecialistUuids(service.id);
+  const configuredUuids = await getServiceSpecialistIds(service.id);
   const eligibleUuids = configuredUuids.length > 0
     ? configuredUuids
     : (await dp.getPractitioners({ activeOnly: true })).map((practitioner) => practitioner.id);

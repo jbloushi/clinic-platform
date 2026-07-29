@@ -16,8 +16,8 @@ type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMino
  * chosen here — /api/services/[id]/slots strips practitionerId, and the
  * actual assignment happens server-side at commit (/api/bookings).
  */
-export function ServiceBookingFlow({ services }: { services: ServiceOpt[] }) {
-  const [selectedService, setSelectedService] = useState<ServiceOpt | null>(null);
+export function ServiceBookingFlow({ services, initialServiceId, preferFirstAvailable = false }: { services: ServiceOpt[]; initialServiceId?: string; preferFirstAvailable?: boolean }) {
+  const [selectedService, setSelectedService] = useState<ServiceOpt | null>(() => services.find((service) => service.id === initialServiceId) ?? (preferFirstAvailable ? services[0] ?? null : null));
 
   if (!selectedService) {
     return <ServicePicker services={services} onSelect={setSelectedService} />;
