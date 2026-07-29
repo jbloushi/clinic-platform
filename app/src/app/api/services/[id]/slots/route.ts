@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
-import { getAvailableSlotsBulk, getEligibleSpecialistUuids } from '@/lib/data/openemr/provider';
+import { getDataProvider } from '@/lib/data';
+import { getServiceSpecialistUuids } from '@/lib/data/platform-repo';
 import type { Slot } from '@/lib/data/types';
 
 /**
@@ -24,8 +25,15 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'not_found' }, { status: 404 });
   }
 
-  const eligibleUuids = await getEligibleSpecialistUuids(id);
-  const byUuid = await getAvailableSlotsBulk(eligibleUuids, from, to, service.durationMinutes);
+  const provider = getDataProvider();
+  const configuredUuids = await getServiceSpecialistUuids(id);
+  const eligibleUuids = configuredUuids.length > 0
+    ? configuredUuids
+    : (await provider.getPractitioners({ activeOnly: true })).map((practitioner) => practitioner.id);
+  const entries = await Promise.all(
+    eligibleUuids.map(async (uuid) => [uuid, await provider.getAvailableSlots(uuid, from, to, service.durationMinutes)] as const),
+  );
+  const byUuid = Object.fromEntries(entries);
 
   // Union by identical [start, end) — the patient only sees "9:00 AM is open,"
   // not which of the N eligible specialists holds it.

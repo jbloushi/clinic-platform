@@ -4,8 +4,7 @@ import { prisma } from '@/lib/db';
 import { getSession } from '@/lib/auth/session';
 import { getDataProvider } from '@/lib/data';
 import { normalizeMobile } from '@/lib/auth/mobile';
-import { getEligibleSpecialistUuids, rankSpecialistsForSlot } from '@/lib/data/openemr/provider';
-import { getEligibleServiceIdsForSpecialist } from '@/lib/data/platform-repo';
+import { getEligibleServiceIdsForSpecialist, getServiceSpecialistUuids } from '@/lib/data/platform-repo';
 
 const bodySchema = z.object({
   // Omitted from /book/service — the specialist is auto-assigned server-side
@@ -78,9 +77,21 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const candidates = parsed.data.practitionerId
-    ? [parsed.data.practitionerId]
-    : await rankSpecialistsForSlot(await getEligibleSpecialistUuids(service.id), parsed.data.start, parsed.data.end);
+  const configuredUuids = await getServiceSpecialistUuids(service.id);
+  const eligibleUuids = configuredUuids.length > 0
+    ? configuredUuids
+    : (await dp.getPractitioners({ activeOnly: true })).map((practitioner) => practitioner.id);
+  const candidatePool = parsed.data.practitionerId ? [parsed.data.practitionerId] : eligibleUuids;
+  const targetDate = parsed.data.start.slice(0, 10);
+  const availability = await Promise.all(
+    candidatePool.map(async (candidate) => ({
+      candidate,
+      slots: await dp.getAvailableSlots(candidate, targetDate, targetDate, service.durationMinutes),
+    })),
+  );
+  const candidates = availability
+    .filter(({ slots }) => slots.some((slot) => slot.available && slot.start === parsed.data.start && slot.end === parsed.data.end))
+    .map(({ candidate }) => candidate);
   if (candidates.length === 0) {
     return NextResponse.json({ error: 'slot_conflict' }, { status: 409 });
   }
