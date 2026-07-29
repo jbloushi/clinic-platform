@@ -26,13 +26,29 @@ export function StaffLoginForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
-      const data = await res.json();
+      const body = await res.text();
+      let data: { error?: string; redirect?: string } = {};
+      if (body) {
+        try {
+          data = JSON.parse(body) as typeof data;
+        } catch {
+          data = {};
+        }
+      }
       if (!res.ok) {
-        setError(data.error === 'invalid_credentials' ? 'Email or password is incorrect.' : 'Sign-in failed.');
+        setError(
+          data.error === 'invalid_credentials'
+            ? 'Email or password is incorrect.'
+            : data.error === 'service_unavailable'
+              ? 'Sign-in is temporarily unavailable. Please try again shortly.'
+              : 'Sign-in failed. Please try again.',
+        );
         return;
       }
       router.push(data.redirect ?? '/ops');
       router.refresh();
+    } catch {
+      setError('Unable to reach the clinic sign-in service. Check your connection and try again.');
     } finally {
       setLoading(false);
     }
