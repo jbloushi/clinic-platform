@@ -5,8 +5,16 @@
  *  - OpenEMR (MariaDB, direct insert): doctors, patients, appointments,
  *    clinical records (problems / allergies / medications / vitals) and
  *    encounters — with uuid_registry entries so the app's FHIR reads work.
- *  - Platform DB (Prisma): patient identities (mobile login), per-doctor
- *    availability, wallet ledger, bookings and payments.
+ *  - Platform DB (Prisma): per-doctor `AvailabilityRule` rows (branch-scoped
+ *    when the doctor's facility is already linked to a platform Branch),
+ *    patient identities (mobile login), wallet ledger, bookings and payments.
+ *
+ * Single- or multi-facility: SEED_FACILITY_ID seeds everyone under one
+ * facility (default). SEED_FACILITY_IDS="12,13" splits doctors — and their
+ * appointments/encounters, which follow their assigned doctor — round-robin
+ * across two or more real facilities. Create the facilities first (ops ->
+ * Branches -> Link facility -> "new facility"); this script does not create
+ * them, only populates doctors/patients/appointments against ids you give it.
  *
  * This is a CLEAR-AND-RESEED script: it wipes prior demo data (all patients,
  * non-system users, appointments, records) and rebuilds a deterministic set.
@@ -17,6 +25,7 @@
 import { createConnection, type Connection } from 'mysql2/promise';
 import { PrismaClient } from '@prisma/client';
 import { randomBytes, scryptSync } from 'node:crypto';
+import { upsertAvailabilityRules } from '../src/lib/data/availability-repo';
 
 const prisma = new PrismaClient();
 
@@ -24,7 +33,19 @@ const prisma = new PrismaClient();
 // (facility 3 = "Your Clinic Name", category 5 = "Office Visit"). A different
 // target instance (e.g. the VPS) may assign different IDs — verify on that
 // OpenEMR first and override via env. See the deployment runbook (Phase D).
-const FACILITY_ID = Number(process.env.SEED_FACILITY_ID ?? 3);
+//
+// One or more facilities: SEED_FACILITY_IDS="12,13" splits doctors (and their
+// appointments/encounters, which follow their assigned doctor) round-robin
+// across each — the multi-branch case. SEED_FACILITY_ID (singular) still
+// works as a single-facility fallback for a one-location instance. Facilities
+// themselves are NOT created here — create them first via ops → Branches →
+// Link facility → "new facility" (goes through the real OpenEMR API), then
+// pass their real ids in.
+const FACILITY_IDS = (process.env.SEED_FACILITY_IDS ?? String(process.env.SEED_FACILITY_ID ?? 3))
+  .split(',')
+  .map((s) => Number(s.trim()))
+  .filter((n) => Number.isFinite(n) && n > 0);
+if (FACILITY_IDS.length === 0) FACILITY_IDS.push(3);
 const CAT_OFFICE_VISIT = Number(process.env.SEED_OFFICE_VISIT_CATID ?? 5);
 
 // ----------------------------------------------------------------------------
@@ -168,14 +189,25 @@ async function reset(conn: Connection) {
 // ----------------------------------------------------------------------------
 // Seed
 // ----------------------------------------------------------------------------
-type DoctorRow = { id: number; uuid: string; fname: string; lname: string; specialty: string };
+type DoctorRow = { id: number; uuid: string; fname: string; lname: string; specialty: string; facilityId: number };
 type PatientRow = { pid: number; uuid: string; fname: string; lname: string; mobile: string; hasIdentity: boolean };
 
 async function seedDoctors(conn: Connection): Promise<DoctorRow[]> {
   console.log('· doctors…');
   const rows: DoctorRow[] = [];
+  // Facility → platform Branch, so seeded availability can be scoped to the
+  // right branch when one is already linked (ops → Branches → Link facility).
+  // Unlinked/unknown facilities fall back to branchId: null (applies
+  // everywhere), matching the table's existing fallback semantics.
+  const branchByFacilityId = new Map<number, string>();
+  for (const facilityId of FACILITY_IDS) {
+    const branch = await prisma.branch.findFirst({ where: { openemrFacilityId: facilityId } });
+    if (branch) branchByFacilityId.set(facilityId, branch.id);
+  }
+
   for (let i = 0; i < DOCTORS.length; i++) {
     const d = DOCTORS[i];
+    const facilityId = FACILITY_IDS[i % FACILITY_IDS.length];
     const hex = uuidHex();
     const username = `doc_${d.fname.toLowerCase()}_${d.lname.toLowerCase()}`;
     const npi = String(9_000_000_000 + Math.floor(rnd() * 999_999_999)).slice(0, 10);
@@ -185,26 +217,32 @@ async function seedDoctors(conn: Connection): Promise<DoctorRow[]> {
         physician_type, main_menu_role, patient_menu_role, date_created, info)
        VALUES (UNHEX(?), ?, ?, ?, 1, 1, '', '', '', 'Your Clinic Name Here', ?, ?, 'Dr.', ?, ?, 1, 3, 1,
         'doctor', 'standard', 'standard', NOW(), ?)`,
-      [hex, username, d.fname, d.lname, FACILITY_ID, npi, d.specialty, d.taxonomy, d.bio],
+      [hex, username, d.fname, d.lname, facilityId, npi, d.specialty, d.taxonomy, d.bio],
     )) as any;
     await registerUuid(conn, hex, 'users');
     const id = res.insertId as number;
     const uuid = formatUuid(hex);
-    rows.push({ id, uuid, fname: d.fname, lname: d.lname, specialty: d.specialty });
+    rows.push({ id, uuid, fname: d.fname, lname: d.lname, specialty: d.specialty, facilityId });
 
-    // Availability rules in platform DB (varied schedules)
+    // Availability rules — written straight to the real AvailabilityRule
+    // table (availability-repo.ts), not the legacy AuditLog blob: nothing
+    // reads that blob anymore since this session's availability cutover, so
+    // writing to it here would have silently produced doctors with no
+    // bookable time at all.
     const morning = { startTime: '09:00', endTime: '13:00', slotMinutes: 20 };
     const afternoon = { startTime: '14:00', endTime: '18:00', slotMinutes: 20 };
-    const patterns: any[][] = [
+    const patterns: { dayOfWeek: number; startTime: string; endTime: string; slotMinutes: number }[][] = [
       [1, 2, 3, 4, 0].map((dow) => ({ dayOfWeek: dow, ...morning })),
       [1, 3, 5].map((dow) => ({ dayOfWeek: dow, ...afternoon })),
       [0, 1, 2, 3, 4].map((dow) => ({ dayOfWeek: dow, ...(dow % 2 ? afternoon : morning) })),
       [2, 3, 4].map((dow) => ({ dayOfWeek: dow, ...morning })),
     ];
     const rules = patterns[i % patterns.length];
-    await prisma.auditLog.create({
-      data: { actor: 'system:seed', action: 'practitioner.availability.set', target: uuid, metadata: JSON.stringify(rules) },
-    });
+    const branchId = branchByFacilityId.get(facilityId) ?? null;
+    await upsertAvailabilityRules(
+      uuid,
+      rules.map((r) => ({ ...r, branchId })),
+    );
   }
 
   // Link the demo doctor staff account to the first cardiologist
@@ -307,7 +345,7 @@ async function seedClinical(conn: Connection, patients: PatientRow[], doctors: D
       await conn.query(
         `INSERT INTO form_encounter (uuid, date, reason, facility, facility_id, pid, encounter, provider_id, pc_catid)
          VALUES (UNHEX(?), ?, ?, 'Your Clinic Name Here', ?, ?, ?, ?, ?)`,
-        [encHex, fmtDateTime(when), reason, FACILITY_ID, p.pid, encounterNo, provider.id, CAT_OFFICE_VISIT],
+        [encHex, fmtDateTime(when), reason, provider.facilityId, p.pid, encounterNo, provider.id, CAT_OFFICE_VISIT],
       );
       await registerUuid(conn, encHex, 'form_encounter');
 
@@ -338,7 +376,7 @@ async function seedClinical(conn: Connection, patients: PatientRow[], doctors: D
   }
 }
 
-type ApptPlan = { pid: number; aid: number; when: Date; durMin: number; status: string; reason: string };
+type ApptPlan = { pid: number; aid: number; facilityId: number; when: Date; durMin: number; status: string; reason: string };
 
 async function seedAppointments(conn: Connection, patients: PatientRow[], doctors: DoctorRow[]) {
   console.log('· appointments…');
@@ -354,9 +392,11 @@ async function seedAppointments(conn: Connection, patients: PatientRow[], doctor
     for (let i = 0; i < count; i++) {
       const d = daysFromNow(day);
       d.setHours(9 + Math.floor(rnd() * 8), pick([0, 20, 40]), 0, 0);
+      const doctor = pick(doctors);
       plans.push({
         pid: pick(patients).pid,
-        aid: pick(doctors).id,
+        aid: doctor.id,
+        facilityId: doctor.facilityId,
         when: d,
         durMin: pick([20, 20, 30]),
         status: pick(statusPast),
@@ -368,9 +408,11 @@ async function seedAppointments(conn: Connection, patients: PatientRow[], doctor
   for (let i = 0; i < 6; i++) {
     const d = new Date();
     d.setHours(9 + i, pick([0, 30]), 0, 0);
+    const doctor = pick(doctors);
     plans.push({
       pid: pick(patients).pid,
-      aid: pick(doctors).id,
+      aid: doctor.id,
+      facilityId: doctor.facilityId,
       when: d,
       durMin: pick([20, 30]),
       status: pick(statusToday),
@@ -383,9 +425,11 @@ async function seedAppointments(conn: Connection, patients: PatientRow[], doctor
     for (let i = 0; i < count; i++) {
       const d = daysFromNow(day);
       d.setHours(9 + Math.floor(rnd() * 8), pick([0, 20, 40]), 0, 0);
+      const doctor = pick(doctors);
       plans.push({
         pid: pick(patients).pid,
-        aid: pick(doctors).id,
+        aid: doctor.id,
+        facilityId: doctor.facilityId,
         when: d,
         durMin: pick([20, 20, 30]),
         status: pick(statusFuture),
@@ -415,8 +459,8 @@ async function seedAppointments(conn: Connection, patients: PatientRow[], doctor
         a.durMin * 60,
         startTime,
         endTime,
-        FACILITY_ID,
-        FACILITY_ID,
+        a.facilityId,
+        a.facilityId,
         a.status,
       ],
     );
