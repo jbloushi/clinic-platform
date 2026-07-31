@@ -1,28 +1,198 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Sun, Sunrise, Sunset } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { DoctorAvatar } from '@/components/domain/avatar';
 import { EmptyState, LoadingState } from '@/components/domain/states';
-import { cn, formatCurrency } from '@/lib/utils';
+import { formatSpecialistRole } from '@/lib/specialist-meta';
+import { cn, formatCurrency, formatTime } from '@/lib/utils';
 import type { Slot } from '@/lib/data/types';
 
 type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string };
 
+type SpecialistOpt = {
+  id: string;
+  name: string;
+  firstName: string;
+  lastName: string;
+  specialty: string;
+  role?: string;
+  photoUrl: string | null;
+};
+
 /**
- * Two-step booking flow: pick a service, then pick a time from the union of
- * every eligible specialist's availability. The specialist is never shown or
- * chosen here — /api/services/[id]/slots strips practitionerId, and the
- * actual assignment happens server-side at commit (/api/bookings).
+ * Three-step booking flow: service, then time, then specialist.
+ *
+ * Time comes before the specialist because most patients care more about when
+ * they can be seen than by whom — /api/services/[id]/slots deliberately unions
+ * availability so the calendar isn't fragmented per doctor. Once a time is
+ * fixed, the choice of who narrows to whoever is genuinely free for it, so the
+ * patient still picks rather than being assigned. From there the flow joins the
+ * doctor-first path at /book with a practitionerId, and both commit the same way.
  */
 export function ServiceBookingFlow({ services, initialServiceId, preferFirstAvailable = false, branch }: { services: ServiceOpt[]; initialServiceId?: string; preferFirstAvailable?: boolean; branch?: string }) {
   const [selectedService, setSelectedService] = useState<ServiceOpt | null>(() => services.find((service) => service.id === initialServiceId) ?? (preferFirstAvailable ? services[0] ?? null : null));
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
 
   if (!selectedService) {
     return <ServicePicker services={services} onSelect={setSelectedService} />;
   }
-  return <AggregatedSlotPicker service={selectedService} branch={branch} onChangeService={() => setSelectedService(null)} />;
+  if (selectedSlot) {
+    return (
+      <SpecialistPicker
+        service={selectedService}
+        slot={selectedSlot}
+        branch={branch}
+        onBack={() => setSelectedSlot(null)}
+      />
+    );
+  }
+  return (
+    <AggregatedSlotPicker
+      service={selectedService}
+      branch={branch}
+      onSelectSlot={setSelectedSlot}
+      onChangeService={() => setSelectedService(null)}
+    />
+  );
+}
+
+/**
+ * Who's free for the time the patient just chose. Loading and empty states both
+ * matter here: an empty list means the slot was taken between the calendar
+ * render and this fetch, which is a dead end the patient needs steering out of
+ * rather than a silent blank.
+ */
+function SpecialistPicker({
+  service,
+  slot,
+  branch,
+  onBack,
+}: {
+  service: ServiceOpt;
+  slot: Slot;
+  branch?: string;
+  onBack: () => void;
+}) {
+  const router = useRouter();
+  const [specialists, setSpecialists] = useState<SpecialistOpt[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSpecialists(null);
+    setError(null);
+    // Branch narrows who can take this slot, so the picker must ask the same
+    // question the booking route will answer at commit.
+    const query = new URLSearchParams({ start: slot.start, end: slot.end });
+    if (branch) query.set('branch', branch);
+    fetch(`/api/services/${service.id}/specialists-for-slot?${query}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
+      .then((data) => {
+        if (!cancelled) setSpecialists(data.specialists ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Could not load specialists for this time. Please try again.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [service.id, slot.start, slot.end, branch]);
+
+  function choose(specialistId: string) {
+    const query = new URLSearchParams({
+      practitionerId: specialistId,
+      serviceId: service.id,
+      start: slot.start,
+      end: slot.end,
+    });
+    if (branch) query.set('branch', branch);
+    router.push(`/book?${query}`);
+  }
+
+  const when = new Date(slot.start).toLocaleDateString('en-US', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+
+  return (
+    <div className="space-y-4">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1.5 text-[13px] font-semibold text-primary hover:underline"
+      >
+        <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden /> Change time
+      </button>
+
+      <Card>
+        <CardContent className="flex items-center justify-between gap-3 pt-5">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{service.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {when} · {formatTime(slot.start)}
+            </p>
+          </div>
+          <p className="shrink-0 text-sm font-semibold tabular-nums">
+            {formatCurrency(service.priceMinor, service.currency)}
+          </p>
+        </CardContent>
+      </Card>
+
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+        Choose your specialist
+      </h2>
+
+      {error ? (
+        <p className="rounded-control border border-[#EBCFCB] bg-[#F7E5E3] px-3 py-2.5 text-[12.5px] text-[#8A2E24]" role="alert">
+          {error}
+        </p>
+      ) : specialists === null ? (
+        <LoadingState label="Finding available specialists…" />
+      ) : specialists.length === 0 ? (
+        <Card>
+          <CardContent className="p-0">
+            <EmptyState
+              title="This time was just taken"
+              description="No specialist is free for it any more. Go back and pick another time."
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <ul className="space-y-2.5">
+          {specialists.map((specialist) => {
+            const roleLabel = formatSpecialistRole(specialist.role);
+            return (
+              <li key={specialist.id}>
+                <button
+                  type="button"
+                  onClick={() => choose(specialist.id)}
+                  className="press-scale flex min-h-[72px] w-full items-center gap-3.5 rounded-card border bg-surface p-4 text-start hover:border-primary"
+                >
+                  <DoctorAvatar
+                    name={`${specialist.firstName} ${specialist.lastName}`}
+                    specialty={specialist.specialty}
+                    photoUrl={specialist.photoUrl}
+                    size={46}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold">{specialist.name}</span>
+                    <span className="block truncate text-[12px] text-muted-foreground">
+                      {[roleLabel, specialist.specialty].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-primary rtl:rotate-180" aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 function ServicePicker({
@@ -64,10 +234,12 @@ function ServicePicker({
 function AggregatedSlotPicker({
   service,
   branch,
+  onSelectSlot,
   onChangeService,
 }: {
   service: ServiceOpt;
   branch?: string;
+  onSelectSlot: (slot: Slot) => void;
   onChangeService: () => void;
 }) {
   const [weekStart, setWeekStart] = useState(() => new Date().toISOString().slice(0, 10));
@@ -92,7 +264,9 @@ function AggregatedSlotPicker({
     setError(null);
     const to = new Date(weekStart);
     to.setDate(to.getDate() + 6);
-    fetch(`/api/services/${service.id}/slots?from=${weekStart}&to=${to.toISOString().slice(0, 10)}`)
+    const query = new URLSearchParams({ from: weekStart, to: to.toISOString().slice(0, 10) });
+    if (branch) query.set('branch', branch);
+    fetch(`/api/services/${service.id}/slots?${query}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
       .then((data) => {
         if (!cancelled) setSlots(data.slots ?? []);
@@ -103,7 +277,9 @@ function AggregatedSlotPicker({
     return () => {
       cancelled = true;
     };
-  }, [service.id, weekStart]);
+    // Branch narrows which doctors' availability is unioned, so a change to it
+    // must refetch — the times shown are branch-specific, not merely labelled.
+  }, [service.id, weekStart, branch]);
 
   const byDate = useMemo(() => {
     const m = new Map<string, Slot[]>();
@@ -238,13 +414,14 @@ function AggregatedSlotPicker({
                       {b.slots.map((s) => {
                         const label = new Date(s.start).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
                         return (
-                          <Link
+                          <button
                             key={s.start}
-                            href={`/book?serviceId=${service.id}&start=${encodeURIComponent(s.start)}&end=${encodeURIComponent(s.end)}${branch ? `&branch=${encodeURIComponent(branch)}` : ''}`}
+                            type="button"
+                            onClick={() => onSelectSlot(s)}
                             className="flex h-10 items-center justify-center rounded-md border bg-card text-sm font-medium tabular-nums text-foreground press-scale hover:border-primary hover:bg-primary hover:text-primary-foreground hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                           >
                             {label}
-                          </Link>
+                          </button>
                         );
                       })}
                     </div>
@@ -254,7 +431,7 @@ function AggregatedSlotPicker({
           </div>
         )}
         <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-          We&apos;ll assign the best available specialist for this time when you confirm.
+          Pick a time and we&apos;ll show you which specialists are free for it.
         </p>
       </Card>
     </div>

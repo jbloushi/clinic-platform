@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { env } from '@/lib/env';
 import { normalizeMobile } from '@/lib/auth/mobile';
-import { sendWhatsAppOtp } from '@/lib/chatwoot';
+import { logPrivateNote } from '@/lib/chatwoot';
+import { sendOtp } from '@/lib/whatsapp';
 
 const bodySchema = z.object({ mobile: z.string().min(6) });
 
@@ -19,10 +20,13 @@ export async function POST(req: NextRequest) {
   // fail loudly rather than silently pretending the code went out.
   if (env.OTP_MODE === 'whatsapp') {
     try {
-      await sendWhatsAppOtp(mobile, code);
+      await sendOtp(mobile, code);
     } catch (e: any) {
       return NextResponse.json({ error: `otp_delivery_failed: ${e?.message ?? e}` }, { status: 502 });
     }
+    // Annotate the agent inbox after the send, and never with the code itself —
+    // an agent needs to know a login code went out, not what it was.
+    void logPrivateNote(mobile, 'System sent a WhatsApp login code (valid 10 minutes).');
   } else if (env.OTP_MODE === 'sms') {
     return NextResponse.json({ error: 'otp_delivery_not_implemented' }, { status: 501 });
   }

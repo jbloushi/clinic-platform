@@ -3,6 +3,7 @@ import type {
   AppointmentQuery,
   AppointmentStatus,
   Encounter,
+  Facility,
   ISODate,
   ISODateTime,
   MedicalHistory,
@@ -30,12 +31,23 @@ export interface DataProvider {
   ): Promise<Practitioner>;
   setPractitionerActive(id: string, active: boolean): Promise<void>;
 
+  // Facilities (clinic locations; a platform Branch points at one of these)
+  getFacilities(): Promise<Facility[]>;
+  getFacilityById(id: string): Promise<Facility | null>;
+  createFacility(data: { name: string; address?: string; phone?: string }): Promise<Facility>;
+
   // Scheduling
   getAvailableSlots(
     practitionerId: string,
     from: ISODate,
     to: ISODate,
     slotMinutes?: number,
+    /**
+     * Restricts availability to rules scoped to this branch (plus any rule with
+     * no branch, which means "all branches"). Optional so the ~8 existing call
+     * sites keep working unchanged.
+     */
+    opts?: { branchId?: string },
   ): Promise<Slot[]>;
   getAppointments(q?: AppointmentQuery): Promise<Appointment[]>;
   getAppointmentById(id: string): Promise<Appointment | null>;
@@ -46,6 +58,8 @@ export interface DataProvider {
     end: ISODateTime;
     reason?: string;
     status?: AppointmentStatus;
+    /** Numeric OpenEMR facility id; falls back to OPENEMR_FACILITY_ID. */
+    facilityId?: string | number;
   }): Promise<Appointment>;
   updateAppointmentStatus(id: string, status: AppointmentStatus): Promise<Appointment>;
 

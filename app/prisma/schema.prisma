@@ -10,6 +10,67 @@ datasource db {
   url      = env("ADAPTER_DATABASE_URL")
 }
 
+// ---------------------------------------------------------------------------
+// Booking configuration enums
+// ---------------------------------------------------------------------------
+
+/// How a doctor is chosen for a service at a branch.
+enum PractitionerSelectionMode {
+  /// Server picks; the patient never sees names before committing.
+  AUTO
+  /// The patient must pick a named doctor.
+  PATIENT_CHOICE
+  /// Offered both ways, defaulting to first-available.
+  AUTO_OR_PATIENT_CHOICE
+  /// Not publicly bookable; reception books it.
+  OPS_ONLY
+}
+
+/// Ranking band applied before numeric priority is compared.
+enum AssignmentPriorityTier {
+  PREFERRED
+  NORMAL
+  BACKUP
+}
+
+/// How the doctor on a booking came to be chosen.
+enum BookingAssignmentMode {
+  AUTO
+  PATIENT_SELECTED
+  OPS_ASSIGNED
+}
+
+/// Which of the two patient journeys produced a booking. Kept for analytics and
+/// audit — the two paths converge on one engine, so this is the only record of
+/// which door the patient came through.
+enum BookingEntryPath {
+  SERVICE_PATH
+  DOCTOR_PATH
+  OPS
+}
+
+/// Every state transition worth explaining to a member of staff later.
+enum BookingChangeType {
+  CREATED
+  HOLD_CREATED
+  AUTO_ASSIGNED
+  REASSIGNED
+  PAYMENT_STARTED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  FINALIZATION_STARTED
+  FINALIZATION_FAILED
+  CONFIRMED
+  RESCHEDULED
+  BRANCH_CHANGED
+  PRACTITIONER_CHANGED
+  SERVICE_CHANGED
+  STATUS_CHANGED
+  CANCELLED
+  REFUNDED
+  RESTORED
+}
+
 /// Staff (reception/doctor/admin/finance). Maps to OpenEMR practitioner UUID for doctors.
 model StaffUser {
   id             String   @id @default(cuid())
@@ -56,10 +117,125 @@ model SessionLog {
   createdAt  DateTime @default(now())
 }
 
+/// Clinic location. An overlay on an OpenEMR `facility` row, not a replacement:
+/// OpenEMR owns the facility (appointments carry `pc_facility`), while the
+/// bilingual name, slug and publishing state are presentation concerns it has
+/// no field for.
+model Branch {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  /// Numeric OpenEMR `facility.id`. Unique because two branches sharing one
+  /// facility would make `pc_facility` ambiguous on every booking. Nullable
+  /// because creating a branch is two steps — the platform row exists before
+  /// the facility is created in or linked to OpenEMR. Publishing is refused
+  /// while it is null.
+  openemrFacilityId Int?     @unique
+  nameEn            String
+  nameAr            String
+  areaEn            String
+  areaAr            String
+  addressLine       String?  @db.Text
+  phone             String?
+  mapUrl            String?  @db.Text
+  /// Defaults false so a half-configured branch cannot leak onto the public site.
+  published         Boolean  @default(false)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  services          Service[]
+  bookings          BookingHold[]
+  practitioners     PractitionerBranch[]
+  serviceBranches   ServiceBranch[]
+  offerings         PractitionerOffering[]
+  availabilityRules AvailabilityRule[]
+}
+
+/// A navigational grouping of specialties. OpenEMR has no department entity —
+/// the closest thing is each practitioner's free-text `specialty` — so the
+/// grouping, its bilingual copy and its ordering live here and map onto those
+/// specialty values via DepartmentSpecialty.
+model Department {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  nameEn      String
+  nameAr      String
+  summaryEn   String   @db.Text
+  summaryAr   String   @db.Text
+  published   Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  services    Service[]
+  specialties DepartmentSpecialty[]
+  serviceLinks    ServiceDepartment[]
+  offerings       PractitionerOffering[]
+  openemrMappings DepartmentOpenemrMapping[]
+}
+
+/// Department -> OpenEMR specialty mapping.
+///
+/// Uniqueness is per (department, specialty) rather than per specialty: one
+/// specialty can legitimately belong to two departments — a gastroenterologist
+/// under both Gastroenterology and General surgery. Reverse lookups therefore
+/// return a list, and display picks the lowest `sortOrder`.
+model DepartmentSpecialty {
+  id           String     @id @default(cuid())
+  departmentId String
+  /// Verbatim OpenEMR `users.specialty`, retained for display.
+  specialty    String     @db.VarChar(191)
+  /// Output of the shared `normalizeSpecialty`. Matching runs on this in
+  /// application code so it cannot depend on the database's collation.
+  specialtyKey String     @db.VarChar(191)
+  createdAt    DateTime   @default(now())
+  department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  @@unique([departmentId, specialtyKey])
+  @@index([specialtyKey])
+}
+
+/// Which branches a practitioner works at.
+///
+/// ZERO rows means NOT publicly bookable anywhere — assignment is explicit, not
+/// inferred. This inverts the earlier "no rows = every branch" convenience:
+/// that default made an unconfigured clinic look correct while quietly offering
+/// every doctor at every location, which is the wrong direction to fail in when
+/// the consequence is a patient travelling to the wrong site.
+///
+/// OpenEMR's `users.facility_id` is deliberately not the authority here. It
+/// records a doctor's home facility for OpenEMR's own screens; public booking
+/// eligibility is a platform decision, shown separately in ops.
+model PractitionerBranch {
+  id                    String   @id @default(cuid())
+  specialistOpenemrUuid String
+  branchId              String
+  active                Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now())
+  branch                Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  @@unique([specialistOpenemrUuid, branchId])
+  @@index([branchId, active])
+  @@index([specialistOpenemrUuid, active])
+}
+
 /// Services catalog — visit types with duration + fee.
 model Service {
   id              String   @id @default(cuid())
   name            String
+  /// Arabic name and summaries stay optional: refusing to create a service
+  /// because its Arabic copy isn't written yet is a worse failure than an
+  /// Arabic page falling back to the English name.
+  nameAr          String?
+  /// Stable public identifier for /services/[slug] and booking deep links.
+  /// Required as of the backfill — every row carries one.
+  slug            String   @unique
+  summaryEn       String?  @db.Text
+  summaryAr       String?  @db.Text
+  departmentId    String?
+  /// Nullable and SetNull: some services ("Follow-up visit") are genuinely
+  /// cross-department, and deleting a department must not delete its services.
+  department      Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  /// Optional restriction to one branch; null = offered everywhere.
+  branchId        String?
+  branch          Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   durationMinutes Int
   priceMinor      Int
   currency        String   @default("KWD")
@@ -69,12 +245,272 @@ model Service {
   /// eligible for it. Distinct from `active` (on/off) and from
   /// ServiceSpecialist (eligibility). Defaults true = shown in search.
   showInServiceSearch Boolean @default(true)
+  /// Listed on the marketing site (/services). Defaults false so internal names
+  /// like "Procedure (in-clinic)" don't appear publicly the moment they're created.
+  publishedOnWeb  Boolean  @default(false)
+  sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  departmentLinks ServiceDepartment[]
+  branchLinks     ServiceBranch[]
+  offerings       PractitionerOffering[]
+  openemrMappings ServiceOpenemrMapping[]
+  @@index([departmentId])
+  @@index([branchId])
 }
 
-/// Service <-> specialist eligibility (many-to-many). A service with ZERO rows
-/// here means "any active specialist can perform it" — the fallback so ops
-/// don't have to configure every service before booking works.
+/// Service <-> department membership.
+///
+/// A service can sit under several departments — a laser treatment belongs to
+/// both Dermatology and Cosmetic Medicine — without being duplicated as two
+/// records with two prices and two URLs. Exactly one active row per service is
+/// `isPrimary`, and that one supplies the canonical breadcrumb, search label,
+/// reporting category, and the department assumed when a patient arrives on a
+/// direct service link.
+///
+/// The single-primary rule is enforced in `setServiceDepartments`, not by the
+/// database: MySQL has no partial unique index, so a constraint here would have
+/// to forbid a second primary even among archived rows.
+model ServiceDepartment {
+  serviceId    String
+  departmentId String
+
+  isPrimary Boolean @default(false)
+  active    Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, departmentId])
+  @@index([departmentId, active, sortOrder])
+  @@index([serviceId, isPrimary])
+}
+
+/// Whether a service is offered at a branch, and on what terms.
+///
+/// Absence means "not offered here" — publishing a service globally does not
+/// expose it at every location. Duration and price are overrides: null inherits
+/// the service-level value, so a branch only records what actually differs.
+model ServiceBranch {
+  serviceId String
+  branchId  String
+
+  active         Boolean @default(true)
+  publishedOnWeb Boolean @default(true)
+  sortOrder      Int     @default(0)
+
+  practitionerSelectionMode PractitionerSelectionMode @default(AUTO_OR_PATIENT_CHOICE)
+
+  /// Overrides in the project's minor-unit convention (fils), matching
+  /// `Service.priceMinor` — deliberately not Decimal, so money is never
+  /// represented two ways in one schema.
+  durationMinutes Int?
+  priceMinor      Int?
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, branchId])
+  @@index([branchId, active, publishedOnWeb])
+}
+
+/// The authoritative statement that a specific doctor performs a specific
+/// service, under a specific department, at a specific branch.
+///
+/// All four must match for a booking option to exist. Eligibility is never
+/// inferred from the parts — a doctor working at a branch, a service offered at
+/// that branch, and a doctor belonging to that department still do not add up
+/// to an offering. That inference is what lets a patient book a dermatologist
+/// for a bariatric consultation because both happen to be at Hawally.
+model PractitionerOffering {
+  id                    String @id @default(cuid())
+  specialistOpenemrUuid String
+  serviceId             String
+  departmentId          String
+  branchId              String
+
+  active         Boolean @default(true)
+  publishedOnWeb Boolean @default(true)
+
+  /// Whether the assignment engine may pick this doctor unprompted, and whether
+  /// a patient may pick them by name. Both can be false — that is an
+  /// ops-books-it-only offering.
+  allowAutoAssignment Boolean @default(true)
+  allowPatientChoice  Boolean @default(true)
+
+  /// Lower sorts first. The tier is compared before the number, so a BACKUP
+  /// doctor with priority 1 still ranks below a NORMAL doctor with priority 900.
+  assignmentPriority     Int                   @default(100)
+  assignmentPriorityTier AssignmentPriorityTier @default(NORMAL)
+
+  sortOrder Int @default(0)
+
+  /// Narrowest override level for duration and fee; falls back to the branch,
+  /// then the service.
+  durationMinutes Int?
+  priceMinor      Int?
+
+  /// When the engine last chose this offering, for least-recently-assigned
+  /// tie-breaking. Null means never.
+  lastAutoAssignedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  service    Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  branch     Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  bookings   BookingHold[]
+
+  @@unique([specialistOpenemrUuid, serviceId, departmentId, branchId])
+  @@index([branchId, serviceId, active])
+  @@index([specialistOpenemrUuid, branchId, active])
+  @@index([departmentId, serviceId, branchId])
+  @@index([allowAutoAssignment, assignmentPriority])
+}
+
+/// Weekly availability, optionally scoped to one branch.
+///
+/// Replaces the JSON blob previously stored in AuditLog rows, which could not
+/// be queried, indexed, or scoped to a branch. A null `branchId` is a fallback
+/// applying wherever the doctor is assigned; a branch-specific rule overrides
+/// the fallback for that branch.
+///
+/// Availability never grants eligibility: a doctor with hours at a branch they
+/// are not assigned to is still not bookable there.
+model AvailabilityRule {
+  id                    String @id @default(cuid())
+  specialistOpenemrUuid String
+  branchId              String?
+
+  /// 0 = Sunday, matching JavaScript's getDay() and the previous blob format.
+  weekday    Int
+  startTime  String  @db.VarChar(5) // "09:00"
+  endTime    String  @db.VarChar(5) // "13:00"
+  slotMinutes Int    @default(20)
+
+  validFrom  DateTime?
+  validUntil DateTime?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branch Branch? @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@index([specialistOpenemrUuid, branchId, weekday, active])
+  @@index([branchId, active])
+}
+
+/// Stable OpenEMR references for a department, kept apart from the free-text
+/// specialty mapping: one is an integration key, the other is a matching
+/// heuristic over text a clinician typed.
+model DepartmentOpenemrMapping {
+  id           String @id @default(cuid())
+  departmentId String
+
+  entityType String  @db.VarChar(64)
+  externalId String  @db.VarChar(191)
+  label      String?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([entityType, externalId])
+  @@index([departmentId, active])
+}
+
+/// Stable OpenEMR references for a service — principally the appointment
+/// category written as `pc_catid`, which is currently a single fixed env value
+/// for every booking regardless of what was booked.
+model ServiceOpenemrMapping {
+  id        String @id @default(cuid())
+  serviceId String
+
+  entityType String  @db.VarChar(64)
+  externalId String  @db.VarChar(191)
+  label      String?
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, entityType])
+  @@index([entityType, externalId])
+}
+
+/// Staff-managed ranking and hold policy. A single row; kept in the database
+/// rather than env vars because these are business rules an administrator
+/// changes, not deployment configuration.
+model AssignmentSettings {
+  id String @id @default("singleton")
+
+  preferPreviousPractitioner Boolean @default(true)
+  /// Days of history compared when ranking by current load.
+  workloadWindowDays         Int     @default(30)
+  useLeastRecentlyAssigned   Boolean @default(true)
+  allowBackupTier            Boolean @default(true)
+
+  holdDurationMinutes Int @default(15)
+  slotSearchWindowDays Int @default(30)
+  /// Granularity of the overlap locks written per hold.
+  slotQuantumMinutes  Int @default(5)
+
+  /// Whether the auto-assigned doctor's name is revealed before payment.
+  showDoctorNameBeforePayment Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
+}
+
+/// Overlap-safe reservation of a doctor's time.
+///
+/// `BookingHold.activeSlotKey` only rejects a second hold with an identical
+/// start instant, so a 30-minute booking at 10:00 does not block a 20-minute
+/// one at 10:10. One lock row per quantum the appointment covers closes that:
+/// any overlap collides on at least one bucket, and the unique index rejects it.
+model PractitionerSlotLock {
+  id                    String   @id @default(cuid())
+  holdId                String
+  specialistOpenemrUuid String
+  slotBucketUtc         DateTime
+
+  hold BookingHold @relation(fields: [holdId], references: [id], onDelete: Cascade)
+
+  @@unique([specialistOpenemrUuid, slotBucketUtc])
+  @@index([holdId])
+}
+
+/// Append-only history of everything that happened to a booking.
+model BookingChange {
+  id        String @id @default(cuid())
+  bookingId String
+
+  type        BookingChangeType
+  changedById String?
+  changedAt   DateTime @default(now())
+
+  previousData Json?
+  newData      Json
+  reason       String? @db.Text
+
+  booking BookingHold @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([bookingId, changedAt])
+}
+
+/// Service <-> specialist eligibility (many-to-many).
+///
+/// Superseded by PractitionerOffering, which states the same thing precisely
+/// (doctor + branch + department + service) instead of globally. Retained while
+/// the offering table is populated and the booking paths are migrated onto it;
+/// remove once nothing reads it.
 model ServiceSpecialist {
   id                     String   @id @default(cuid())
   serviceId              String
@@ -87,14 +523,18 @@ model ServiceSpecialist {
 
 /// Booking hold — temporary slot reservation before payment. On confirm, we create the OpenEMR appointment.
 ///
-/// The (practitionerOpenemrId, startAt) unique constraint is the atomic gate
-/// against double-booking: OpenEMR's own appointment table has no such
-/// constraint (confirmed empirically — two concurrent creates for the same
-/// provider/time both succeed there), so the serialization has to happen on
-/// our side. The booking API creates this row FIRST and lets the unique
-/// constraint reject a concurrent duplicate before ever writing to OpenEMR.
-/// There's no cancel/reschedule flow yet, so this can't yet block a
-/// legitimate re-book of a cancelled slot — revisit if one is added.
+/// `activeSlotKey` is the atomic gate against double-booking: OpenEMR's own
+/// appointment table has no such constraint (confirmed empirically — two
+/// concurrent creates for the same provider/time both succeed there), so the
+/// serialization has to happen on our side. The booking API writes this row
+/// FIRST and lets the unique index reject a concurrent duplicate before ever
+/// touching OpenEMR.
+///
+/// It holds "<practitionerOpenemrId>|<startAt ISO>" while the booking is live
+/// and NULL once cancelled or expired. MySQL treats NULLs as distinct in a
+/// unique index, so a released slot stops competing and can be re-booked, while
+/// the row itself is kept for history. A plain unique on
+/// (practitionerOpenemrId, startAt) could not express that.
 model BookingHold {
   id                    String   @id @default(cuid())
   patientIdentityId     String?
@@ -103,12 +543,64 @@ model BookingHold {
   startAt               DateTime
   endAt                 DateTime
   status                String   @default("held") // held | pending_payment | confirmed | cancelled | expired
+  /// Non-null only while the slot is actually held. See the model comment.
+  activeSlotKey         String?  @db.VarChar(255)
   openemrAppointmentId  String?  // populated on confirm
   reason                String?  @db.Text
   holdExpiresAt         DateTime
+  /// Set when this visit continues an earlier one — the doctor requested a
+  /// follow-up, or the patient rebooked from a past visit. Lets the chart show
+  /// a visit as part of a case rather than an isolated appointment.
+  followUpFromBookingId String?
+  /// Set when this booking replaces one the patient moved. Distinct from a
+  /// follow-up: same visit, new time, not a second episode of care.
+  rescheduledFromBookingId String?
+  /// Where the visit takes place. Permanently nullable: bookings made before
+  /// branches existed have no true answer, and inventing one would misstate
+  /// where a patient was seen. New bookings are required to carry it by the API.
+  branchId              String?
+  branch                Branch?  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// The facility id actually written to OpenEMR, snapshotted so history stays
+  /// accurate if a branch is later re-pointed at a different facility.
+  openemrFacilityId     Int?
+
+  // ---- Assignment ----------------------------------------------------------
+  /// How the doctor was chosen. Null on bookings made before offerings existed.
+  assignmentMode         BookingAssignmentMode?
+  /// Which patient journey produced this booking.
+  bookingEntryPath       BookingEntryPath?
+  assignedAutomatically  Boolean               @default(false)
+  /// Why the engine picked this doctor — surfaced to ops, never to the patient.
+  assignmentReason       String?               @db.VarChar(64)
+  assignmentMetadata     Json?
+  /// The exact offering booked. Nullable so a doctor's offering can later be
+  /// retired without orphaning the appointment that used it.
+  practitionerOfferingId String?
+  practitionerOffering   PractitionerOffering? @relation(fields: [practitionerOfferingId], references: [id], onDelete: SetNull)
+  /// How many doctors could have taken this slot, for load analysis.
+  eligibleDoctorCount    Int?
+
+  // ---- Snapshots -----------------------------------------------------------
+  // Confirmations, receipts and history read from these rather than joining
+  // live configuration, so renaming a branch or archiving a service cannot
+  // rewrite what a patient was told at the time.
+  serviceNameSnapshot      String?
+  departmentNameSnapshot   String?
+  branchNameSnapshot       String?
+  practitionerNameSnapshot String?
+  serviceDurationSnapshot  Int?
+  servicePriceSnapshot     Int?
+  openemrCategoryIdSnapshot String? @db.VarChar(191)
+
+  slotLocks PractitionerSlotLock[]
+  changes   BookingChange[]
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
-  @@unique([practitionerOpenemrId, startAt])
+  @@unique([activeSlotKey])
+  @@index([practitionerOpenemrId, startAt])
+  @@index([followUpFromBookingId])
+  @@index([patientIdentityId])
+  @@index([branchId])
 }
 
 /// Wallet ledger — append-only. Balance is derived.

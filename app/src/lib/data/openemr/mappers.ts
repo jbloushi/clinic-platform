@@ -1,4 +1,5 @@
-import type { Appointment, AppointmentStatus, Patient, Practitioner } from '../types';
+import type { Appointment, AppointmentStatus, Facility, Patient, Practitioner } from '../types';
+import { env } from '@/lib/env';
 
 /**
  * OpenEMR ↔ domain model mapping. Adjust as we learn more of the wire format
@@ -86,13 +87,18 @@ export function toPractitioner(dto: OpenEMRPractitionerDto): Practitioner {
   return {
     id: dto.uuid ?? String(dto.id ?? ''),
     openemrNumericId: dto.id != null ? String(dto.id) : undefined,
+    facilityId: dto.facility_id != null ? String(dto.facility_id) : undefined,
     firstName: dto.fname ?? '',
     lastName: dto.lname ?? '',
     title: dto.title || 'Dr.',
     specialty: dto.specialty || 'General Practice',
     role: dto.physician_type || undefined,
     bio: dto.info || undefined,
-    consultationFeeMinor: 15000,
+    // OpenEMR has no fee field. Price lives in the platform Service catalog, so
+    // this is a neutral zero and the provider fills it from the cheapest service
+    // the specialist is eligible for. Zero (rather than a made-up number) is
+    // what lets the UI hide the fee instead of quoting one we can't stand behind.
+    consultationFeeMinor: 0,
     currency: 'KWD',
     active,
     availability: [], // stored in platform DB; see providers repository
@@ -114,8 +120,11 @@ export function fromPractitioner(
     federaltaxid: '',
     federaldrugid: '',
     upin: '',
-    facility_id: '3',
-    facility: 'Your Clinic Name',
+    // Preserve whatever facility the practitioner is already assigned to. This
+    // used to be hardcoded to the env default, so every edit through ops
+    // silently relocated the doctor to that one facility. The env value is now
+    // only a fallback for a practitioner being created without one.
+    facility_id: p.facilityId ?? String(env.OPENEMR_FACILITY_ID),
     physician_type: p.role ?? '',
     email: p.email ?? '',
   };
@@ -127,6 +136,54 @@ function synthesizeNpi(p: Partial<Practitioner>): string {
   let n = 0;
   for (const ch of seed) n = (n * 31 + ch.charCodeAt(0)) & 0xffffff;
   return String(9_000_000_000 + (n % 999_999_999)).padStart(10, '9');
+}
+
+// -------- Facility (Standard REST /api/facility) --------
+
+export interface OpenEMRFacilityDto {
+  id?: string | number;
+  uuid?: string;
+  name?: string;
+  street?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  phone?: string;
+  email?: string;
+  /** '1' when the facility can host appointments. */
+  service_location?: string | number;
+  billing_location?: string | number;
+  inactive?: string | number;
+}
+
+export function toFacility(dto: OpenEMRFacilityDto): Facility {
+  return {
+    // The numeric id, not the uuid: appointments reference facilities by
+    // `pc_facility`, which is numeric.
+    id: String(dto.id ?? ''),
+    name: dto.name ?? 'Unnamed facility',
+    address: [dto.street, dto.city, dto.state, dto.postal_code].filter(Boolean).join(', ') || undefined,
+    phone: dto.phone || undefined,
+    // OpenEMR stores the negative ("inactive"); a facility that can't host a
+    // visit is not usable as a branch either, so both flags matter.
+    active: !truthy(dto.inactive) && truthy(dto.service_location ?? 1),
+  };
+}
+
+export function fromFacility(f: { name: string; address?: string; phone?: string }): OpenEMRFacilityDto {
+  return {
+    name: f.name,
+    street: f.address ?? '',
+    phone: f.phone ?? '',
+    // Without service_location a facility cannot hold appointments, which is
+    // the entire point of creating one from here.
+    service_location: 1,
+    billing_location: 1,
+  };
+}
+
+function truthy(v: string | number | undefined): boolean {
+  return v === 1 || v === '1';
 }
 
 // -------- Appointment (Standard REST /api/appointment; table openemr_postcalendar_events) --------

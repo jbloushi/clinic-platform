@@ -3,6 +3,14 @@ import { cn } from '@/lib/utils';
 
 export type Step = { key: string; label: string };
 
+/**
+ * Booking progress indicator.
+ *
+ * Labels stay visible at every width — on a booking flow the patient needs to
+ * know which decision they're on, and that's exactly the screen size where the
+ * context is scarcest. Completed steps carry a check rather than their number,
+ * so "done" reads without relying on colour.
+ */
 export function Stepper({
   steps,
   current,
@@ -13,37 +21,43 @@ export function Stepper({
   className?: string;
 }) {
   return (
-    <ol className={cn('flex items-center gap-2', className)} aria-label="Progress">
-      {steps.map((s, i) => {
-        const state = i < current ? 'done' : i === current ? 'active' : 'pending';
+    <ol className={cn('flex items-start', className)} aria-label="Booking progress">
+      {steps.map((step, index) => {
+        const state = index < current ? 'done' : index === current ? 'active' : 'pending';
+        const complete = state === 'done';
+
         return (
-          <li key={s.key} className="flex flex-1 items-center gap-2">
-            <span
-              className={cn(
-                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold ring-1 tabular-nums',
-                state === 'done' && 'bg-primary text-primary-foreground ring-primary',
-                state === 'active' && 'bg-primary/10 text-primary ring-primary',
-                state === 'pending' && 'bg-muted text-muted-foreground ring-border',
-              )}
-              aria-current={state === 'active' ? 'step' : undefined}
-            >
-              {state === 'done' ? <Check className="h-3.5 w-3.5" /> : i + 1}
-            </span>
-            <span
-              className={cn(
-                'hidden text-xs font-medium sm:inline-block',
-                state === 'pending' ? 'text-muted-foreground' : 'text-foreground',
-              )}
-            >
-              {s.label}
-            </span>
-            {i < steps.length - 1 && (
+          <li key={step.key} className="flex flex-1 items-start last:flex-none">
+            <div className="flex w-full flex-col items-center gap-1.5">
               <span
                 aria-hidden
                 className={cn(
-                  'ml-1 flex-1 rounded-full',
-                  'h-0.5',
-                  i < current ? 'bg-primary' : 'bg-border',
+                  'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full text-[12px] font-semibold tabular-nums',
+                  state === 'pending'
+                    ? 'bg-border text-muted-foreground'
+                    : 'bg-primary text-primary-foreground',
+                )}
+              >
+                {complete ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : index + 1}
+              </span>
+              <span
+                className={cn(
+                  'text-center text-[10px] leading-tight',
+                  state === 'pending' ? 'font-medium text-muted-foreground' : 'font-semibold text-primary',
+                )}
+              >
+                {step.label}
+                {state === 'active' && <span className="sr-only"> (current step)</span>}
+                {complete && <span className="sr-only"> (completed)</span>}
+              </span>
+            </div>
+
+            {index < steps.length - 1 && (
+              <span
+                aria-hidden
+                className={cn(
+                  'mt-[12px] h-0.5 flex-1 rounded-full',
+                  index < current ? 'bg-primary' : 'bg-border',
                 )}
               />
             )}

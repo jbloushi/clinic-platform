@@ -4,15 +4,24 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",
+    "dev:altport": "next dev -p 3100",
     "build": "next build",
     "start": "next start -p 3000",
     "prod": "next build && next start -p 3000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "node --env-file=.env.local node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "prisma:push": "prisma db push",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "tsx --env-file=.env prisma/seed.ts",
+    "backfill:reference": "tsx --env-file=.env scripts/backfill-reference-data.ts",
+    "backfill:offerings": "tsx --env-file=.env scripts/backfill-booking-offerings.ts",
+    "migrate:availability": "tsx --env-file=.env.local scripts/migrate-availability-blob.ts",
     "seed": "tsx --env-file=.env scripts/seed-openemr.ts",
-    "setup": "prisma db push && tsx --env-file=.env prisma/seed.ts && tsx --env-file=.env scripts/seed-openemr.ts"
+    "seed:offerings": "tsx --env-file=.env.local scripts/seed-offerings.ts",
+    "setup": "prisma migrate deploy && tsx --env-file=.env prisma/seed.ts && tsx --env-file=.env scripts/backfill-reference-data.ts && tsx --env-file=.env scripts/seed-openemr.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -51,6 +60,7 @@
     "prisma": "^5.22.0",
     "tailwindcss": "^3.4.14",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   }
 }

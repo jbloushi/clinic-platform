@@ -24,7 +24,18 @@ const DEFAULT_AVAILABILITY: AvailabilityRule[] = [
 
 const AVAILABILITY_ACTION = 'practitioner.availability.set';
 
-export async function getPractitionerAvailability(practitionerId: string): Promise<AvailabilityRule[]> {
+/**
+ * A practitioner's weekly availability, optionally narrowed to one branch.
+ *
+ * A rule with no `branchId` applies at every branch — that's what keeps a
+ * clinic that hasn't split its schedules per site working unchanged, and it's
+ * why `DEFAULT_AVAILABILITY` (which has no branch) makes an unconfigured
+ * practitioner appear available everywhere rather than nowhere.
+ */
+export async function getPractitionerAvailability(
+  practitionerId: string,
+  branchId?: string,
+): Promise<AvailabilityRule[]> {
   const row = await prisma.auditLog.findFirst({
     where: { action: AVAILABILITY_ACTION, target: practitionerId },
     orderBy: { createdAt: 'desc' },
@@ -32,7 +43,14 @@ export async function getPractitionerAvailability(practitionerId: string): Promi
   if (!row?.metadata) return DEFAULT_AVAILABILITY;
   try {
     const parsed = JSON.parse(row.metadata) as AvailabilityRule[];
-    return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_AVAILABILITY;
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_AVAILABILITY;
+    if (!branchId) return parsed;
+
+    const scoped = parsed.filter((rule) => !rule.branchId || rule.branchId === branchId);
+    // Every rule belongs to some other branch: this practitioner genuinely
+    // doesn't work here, so return nothing rather than falling back to the
+    // default and inventing hours at a branch they don't attend.
+    return scoped;
   } catch {
     return DEFAULT_AVAILABILITY;
   }

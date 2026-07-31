@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireStaff } from '@/lib/auth/guards';
-import { setPractitionerAvailability } from '@/lib/data/platform-repo';
+import { upsertAvailabilityRules } from '@/lib/data/availability-repo';
 
 const bodySchema = z.object({
   rules: z.array(
@@ -15,11 +15,11 @@ const bodySchema = z.object({
 });
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const staff = await requireStaff(['admin']);
+  await requireStaff(['admin']);
   const { id } = await params;
   const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'invalid_input' }, { status: 400 });
 
-  await setPractitionerAvailability(id, parsed.data.rules as any, `staff:${staff.id}`);
+  await upsertAvailabilityRules(id, parsed.data.rules);
   return NextResponse.json({ ok: true });
 }

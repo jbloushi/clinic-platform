@@ -33,8 +33,19 @@
     --divider: 42 15% 79%;
     --input: 43 19% 86%;
     --ring: 174 79% 20%;
+    --placeholder: 158 5% 56%;
 
     --radius: 0.875rem;
+    /* Design-system shapes: cards 14–16px, buttons/inputs 11–12px. */
+    --radius-card: 0.9375rem;
+    --radius-control: 0.6875rem;
+
+    /* Warm status tints — surface + border pairs used by badges and banners */
+    --tint-teal: 167 23% 92%;
+    --tint-teal-border: 167 25% 85%;
+    --tint-gold: 44 65% 91%;
+    --tint-gold-border: 44 55% 81%;
+    --tint-neutral-border: 42 24% 84%;
 
     /* Booking status colors — single source of truth */
     --status-held: 38 92% 50%;
@@ -73,7 +84,13 @@
   h1,
   h2,
   .font-editorial {
-    font-family: 'Source Serif 4', 'Noto Naskh Arabic', 'Geeza Pro', Georgia, serif;
+    font-family: var(--font-editorial-latin), var(--font-editorial-arabic), 'Geeza Pro', Georgia,
+      serif;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: hsl(var(--placeholder));
   }
 
   /* Tabular numerals on data — keeps stats & tables aligned */
@@ -132,6 +149,61 @@
 
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Deep-teal brand header used by the patient hero and doctor profile. */
+  .brand-gradient {
+    background: linear-gradient(160deg, hsl(var(--primary)), hsl(var(--primary-dark)));
+  }
+
+  /* Gold central booking action — the single gold gradient in the system. */
+  .accent-gradient {
+    background: linear-gradient(150deg, hsl(var(--accent)), hsl(var(--accent-foreground)));
+  }
+
+  /**
+   * Sticky bottom action bar (slot summary, "Continue to payment", "Pay").
+   * Sits above the safe area and is translucent so the page reads as
+   * continuous underneath it.
+   *
+   * `--patient-nav-h` lifts it clear of the fixed bottom navigation. The bar is
+   * `sticky bottom-0`, which pins to the viewport rather than to the padded
+   * content box, so the container's `has-mobile-nav` padding does not move it —
+   * without this offset the nav would sit on top of the primary action.
+   */
+  .sticky-action-bar {
+    @apply sticky z-20 mt-auto border-t bg-surface/95 backdrop-blur-md;
+    bottom: var(--patient-nav-h, 0px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 0.875rem);
+  }
+
+  /**
+   * Reserve room for the fixed patient bottom navigation so page content is
+   * never hidden behind it. Applied to the scroll container, not the nav.
+   */
+  .has-mobile-nav {
+    --patient-nav-h: calc(env(safe-area-inset-bottom) + 4rem);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 5.25rem);
+  }
+  @media (min-width: 768px) {
+    .has-mobile-nav {
+      --patient-nav-h: 0px;
+      padding-bottom: 0;
+    }
+  }
+
+  /* Horizontal filter/day rails: scrollable without a visible scrollbar. */
+  .rail {
+    @apply flex gap-2 overflow-x-auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    scroll-snap-type: x proximity;
+  }
+  .rail::-webkit-scrollbar {
+    display: none;
+  }
+  .rail > * {
+    scroll-snap-align: start;
   }
 
   .card-hover {

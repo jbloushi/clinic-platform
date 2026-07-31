@@ -1,14 +1,214 @@
 import Link from 'next/link';
-import { ArrowRight, Building2, CalendarCheck, Search, ShieldCheck, Stethoscope } from 'lucide-react';
-import { PublicShell } from '@/components/domain/public-shell';
+import { ArrowRight, Building2, CalendarCheck, LifeBuoy, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { branches, departments, services } from '@/lib/clinic-catalog';
+import { BranchSelector } from '@/components/domain/branch-selector';
+import { DepartmentTile } from '@/components/domain/department-tile';
+import { DoctorCard } from '@/components/domain/doctor-card';
+import { UnifiedClinicSearch } from '@/components/domain/clinic-search';
+import { PatientShell } from '@/components/domain/patient-shell';
+import { ErrorState } from '@/components/domain/states';
+import { getDataProvider } from '@/lib/data';
+import { bySoonestAvailable, getNextAvailableMap } from '@/lib/data/availability-hints';
+import { buildClinicSearchIndex } from '@/lib/search/clinic-search-index';
+import { listBranches, listDepartments } from '@/lib/data/reference-repo';
+import { listBookableServices } from '@/lib/data/service-catalog';
+import { getLocale } from '@/lib/i18n-server';
+import type { Practitioner } from '@/lib/data/types';
 
-export default function HomePage() {
-  return <PublicShell>
-    <section className="glow-radial border-b text-primary-foreground"><div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 lg:grid-cols-[1.15fr_.85fr] lg:py-16"><div><p className="text-sm font-semibold text-white/75">Dr. Al Jarallah Clinic · Kuwait</p><h1 className="mt-3 max-w-3xl font-editorial text-[29px] font-semibold leading-tight tracking-tight sm:text-5xl">Care you can trust, close to home.</h1><p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-white/75 sm:text-lg">Book with the right specialist in under a minute at Hawally or Jahra.</p><div className="mt-7 flex flex-wrap gap-3"><Button asChild size="lg" className="bg-accent text-white hover:bg-accent/90"><Link href="/book"><CalendarCheck />Book appointment</Link></Button><Button asChild size="lg" variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"><Link href="/doctors"><Stethoscope />Find a doctor</Link></Button></div><ul className="mt-7 flex flex-wrap gap-x-6 gap-y-3 text-sm text-white/75"><li className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-accent" />Confidential medical care</li><li className="flex items-center gap-2"><Building2 className="h-4 w-4 text-accent" />Hawally and Jahra</li></ul></div><form action="/doctors" className="self-center rounded-lg border border-white/15 bg-surface-soft p-5 text-foreground shadow-sm"><label htmlFor="care-search" className="text-base font-semibold">What care are you looking for?</label><p className="mt-1 text-sm text-muted-foreground">Search by doctor, service, or department.</p><div className="relative mt-4"><Search className="absolute start-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" /><input id="care-search" name="q" className="h-14 w-full rounded-md border bg-card ps-12 pe-4 text-base" placeholder="e.g. nutrition or gastroenterology" /></div><Button className="mt-3 w-full" size="lg">Search clinic care</Button><div className="mt-5 border-t pt-4"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Book by location</p><div className="mt-2 flex gap-2">{branches.map(b => <Button key={b.slug} asChild variant="outline" className="flex-1"><Link href={`/book?branch=${b.slug}`}>{b.name.en}</Link></Button>)}</div></div></form></div></section>
-    <section className="mx-auto max-w-6xl px-4 py-14"><div className="flex items-end justify-between gap-4"><div><p className="text-sm font-semibold text-primary">Departments</p><h2 className="mt-1 text-3xl font-semibold tracking-tight">Choose the right clinical team</h2></div><Button asChild variant="ghost" className="hidden sm:flex"><Link href="/departments">All departments <ArrowRight /></Link></Button></div><div className="mt-7 divide-y rounded-xl border bg-card">{departments.map((d) => <Link key={d.slug} href={`/departments/${d.slug}`} className="group grid gap-1 p-5 hover:bg-accent/60 sm:grid-cols-[.8fr_1.2fr_auto] sm:items-center"><h3 className="font-semibold">{d.name.en}</h3><p className="text-sm text-muted-foreground">{d.summary.en}</p><ArrowRight className="hidden h-4 w-4 text-primary sm:block" /></Link>)}</div></section>
-    <section className="border-y bg-card/50"><div className="mx-auto max-w-6xl px-4 py-14"><p className="text-sm font-semibold text-primary">Common appointments</p><h2 className="mt-1 text-3xl font-semibold tracking-tight">Start with a service</h2><div className="mt-7 grid gap-4 md:grid-cols-2">{services.map(s => <Link key={s.slug} href={`/services/${s.slug}`} className="rounded-xl border bg-card p-5 card-hover"><div className="flex justify-between gap-4"><h3 className="font-semibold">{s.name.en}</h3>{s.durationMinutes && <span className="text-sm text-muted-foreground">{s.durationMinutes} min</span>}</div><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{s.summary.en}</p><span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-primary">View service <ArrowRight className="h-4 w-4" /></span></Link>)}</div></div></section>
-    <section className="mx-auto max-w-6xl px-4 py-14"><p className="text-sm font-semibold text-primary">Your patient journey</p><h2 className="mt-1 text-3xl font-semibold tracking-tight">Know what happens next</h2><ol className="mt-7 grid gap-4 md:grid-cols-3">{[['1','Choose your care','Start with a service, department, doctor, or the earliest suitable appointment.'],['2','Confirm your visit','Select a branch and verified available time, then securely identify yourself.'],['3','Prepare with confidence','Review your appointment details and any preparation instructions before attending.']].map(([n,t,d]) => <li key={n} className="border-s-2 border-primary ps-4"><span className="text-sm font-semibold text-primary">Step {n}</span><h3 className="mt-1 font-semibold">{t}</h3><p className="mt-2 text-sm text-muted-foreground">{d}</p></li>)}</ol></section>
-  </PublicShell>;
+export const dynamic = 'force-dynamic';
+
+/** How many specialists the "earliest available" block shows. */
+const FEATURED_COUNT = 3;
+
+export default async function HomePage() {
+  const locale = await getLocale();
+  const dp = getDataProvider();
+
+  let specialists: Practitioner[] = [];
+  let rosterError: string | null = null;
+  try {
+    specialists = await dp.getPractitioners({ activeOnly: true });
+  } catch (error: unknown) {
+    rosterError = error instanceof Error ? error.message : 'Could not load the specialist roster';
+  }
+
+  const [nextAvailable, branches, departments, services] = await Promise.all([
+    getNextAvailableMap(dp, specialists),
+    listBranches({ publishedOnly: true }),
+    listDepartments({ publishedOnly: true }),
+    listBookableServices({ publishedOnWeb: true }),
+  ]);
+  const soonest = [...specialists].sort(bySoonestAvailable(nextAvailable)).slice(0, FEATURED_COUNT);
+  const searchIndex = buildClinicSearchIndex({
+    doctors: specialists,
+    services,
+    departments,
+    locale,
+  });
+
+  return (
+    <PatientShell>
+      <section className="brand-gradient px-5 pb-7 pt-6 text-surface-soft md:px-8 md:pb-12 md:pt-10">
+          <div className="mx-auto max-w-6xl">
+            {/* Identity and the language control live in the header at every
+                width now, so the hero no longer repeats them on mobile. */}
+            <div className="md:grid md:grid-cols-[1.05fr_.95fr] md:items-end md:gap-12">
+              <div>
+                <h1 className="max-w-[18ch] font-editorial text-[27px] font-semibold leading-[1.12] md:text-[44px]">
+                  Care you can trust, close to home.
+                </h1>
+                <p className="mt-1.5 max-w-[46ch] text-[13.5px] leading-relaxed text-surface-soft/80 md:text-[16px]">
+                  Book with the right specialist in under a minute.
+                </p>
+
+                <div className="mt-[18px]">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-surface-soft/65">
+                    Choose a branch
+                  </p>
+                  <BranchSelector
+                    variant="on-brand"
+                    branches={branches.map((branch) => ({
+                      slug: branch.slug,
+                      label: locale === 'ar' ? branch.nameAr : branch.nameEn,
+                      href: `/book?branch=${branch.slug}`,
+                    }))}
+                  />
+                </div>
+              </div>
+
+              <ul className="mt-7 hidden gap-x-6 gap-y-2 text-[14px] text-surface-soft/80 md:flex md:flex-wrap">
+                <li className="inline-flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-accent" aria-hidden />
+                  Confidential medical care
+                </li>
+                <li className="inline-flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-accent" aria-hidden />
+                  Hawally and Jahra
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Search sits across the hero edge, as in the approved design. */}
+        <div className="relative z-20 -mt-5 px-5 md:px-8">
+          <div className="mx-auto max-w-6xl md:max-w-2xl">
+            <UnifiedClinicSearch index={searchIndex} />
+          </div>
+        </div>
+
+        <div className="mx-auto max-w-6xl space-y-9 px-5 pb-10 pt-7 md:px-8 md:pb-16 md:pt-10">
+          <section>
+            <SectionHeading title="Departments" href="/departments" linkLabel="See all" />
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+              {departments.map((department) => (
+                <DepartmentTile
+                  key={department.id}
+                  slug={department.slug}
+                  name={locale === 'ar' ? department.nameAr : department.nameEn}
+                  summary={locale === 'ar' ? department.summaryAr : department.summaryEn}
+                />
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionHeading
+              title="Earliest appointments"
+              href="/doctors"
+              linkLabel="All specialists"
+            />
+            {rosterError ? (
+              <div className="rounded-card border bg-surface">
+                <ErrorState description={rosterError} />
+              </div>
+            ) : soonest.length === 0 ? (
+              <p className="rounded-card border bg-surface p-5 text-[13.5px] text-muted-foreground">
+                No specialists are published yet. Please check back shortly.
+              </p>
+            ) : (
+              <div className="grid gap-3 lg:grid-cols-3">
+                {soonest.map((specialist) => (
+                  <DoctorCard
+                    key={specialist.id}
+                    specialist={specialist}
+                    nextAvailable={nextAvailable[specialist.id]}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <SectionHeading title="Our branches" href="/branches" linkLabel="Details" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {branches.map((branch) => (
+                <Link
+                  key={branch.id}
+                  href={`/branches/${branch.slug}`}
+                  className="card-hover flex items-center gap-3.5 rounded-card border bg-surface p-4"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-tint-teal text-primary"
+                  >
+                    <Building2 className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[14px] font-semibold">
+                      {locale === 'ar' ? branch.nameAr : branch.nameEn}
+                    </span>
+                    <span className="block truncate text-[12px] text-muted-foreground">
+                      {locale === 'ar' ? branch.areaAr : branch.areaEn}
+                    </span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-primary rtl:rotate-180" aria-hidden />
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-card border border-tint-gold-border bg-tint-gold p-5">
+            <h2 className="inline-flex items-center gap-2 font-editorial text-[17px] font-semibold text-accent-foreground">
+              <LifeBuoy className="h-[18px] w-[18px] shrink-0" aria-hidden />
+              Not sure who to see?
+            </h2>
+            <p className="mt-1.5 max-w-[52ch] text-[13px] leading-relaxed text-accent-foreground/90">
+              Tell us the reason for your visit and we&apos;ll route you to the right department —
+              or contact the clinic and our team will help you choose.
+            </p>
+            <div className="mt-3.5 flex flex-wrap gap-2.5">
+              <Button asChild size="sm" className="rounded-control">
+                <Link href="/book">
+                  <CalendarCheck />
+                  Book an appointment
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="rounded-control bg-surface">
+                <Link href="/contact">Contact the clinic</Link>
+              </Button>
+            </div>
+          </section>
+      </div>
+    </PatientShell>
+  );
+}
+
+function SectionHeading({
+  title,
+  href,
+  linkLabel,
+}: {
+  title: string;
+  href: string;
+  linkLabel: string;
+}) {
+  return (
+    <div className="mb-3 flex items-baseline justify-between gap-3">
+      <h2 className="font-editorial text-[17px] font-semibold md:text-[22px]">{title}</h2>
+      <Link href={href} className="text-[12.5px] font-semibold text-primary hover:underline">
+        {linkLabel}
+      </Link>
+    </div>
+  );
 }

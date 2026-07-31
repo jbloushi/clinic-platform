@@ -1,38 +1,15 @@
 /**
- * Demo-only derived specialist attributes.
+ * Display helpers for specialist identity and availability.
  *
- * The card design shows a rating, spoken languages and a visit mode, none of
- * which exist in OpenEMR's user record. Rather than invent random values on
- * each render, we derive them deterministically from the practitioner id so
- * they stay stable across pages and reloads. Swap these for real fields when a
- * ratings / provider-profile source exists.
+ * Everything here is derived from authoritative provider data. Ratings, spoken
+ * languages, procedure counts and visit modes appear in the visual design but
+ * have no source in OpenEMR's user record, so they are deliberately absent —
+ * synthesising credibility signals for a medical directory isn't acceptable,
+ * even as placeholder content. Add them back only alongside a real data source.
  */
 
-/** Next-available slot as passed to SpecialistCard: raw ISO (drives tone logic) + a formatted label. */
+/** Next-available slot: raw ISO (drives tone logic) + a formatted label. */
 export type NextAvailable = { iso: string; label: string };
-
-function hash(seed: string, mult: number): number {
-  let n = 0;
-  for (let i = 0; i < seed.length; i++) n = (n * mult + seed.charCodeAt(i)) | 0;
-  return Math.abs(n);
-}
-
-/** Stable 4.5–4.9 rating. */
-export function specialistRating(id: string): string {
-  return (4.5 + (hash(id, 31) % 5) / 10).toFixed(1);
-}
-
-const SECOND_LANGUAGES = ['Arabic', 'Urdu', 'French', 'Hindi', 'Spanish', 'Turkish'];
-
-/** "English · <second language>". */
-export function specialistLanguages(id: string): string {
-  return `English · ${SECOND_LANGUAGES[hash(id, 17) % SECOND_LANGUAGES.length]}`;
-}
-
-/** Whether the specialist offers video visits (else in-person only). */
-export function specialistVisitMode(id: string): 'Video visit' | 'In-person' {
-  return hash(id, 13) % 3 === 0 ? 'In-person' : 'Video visit';
-}
 
 /**
  * Normalize OpenEMR's free-form `physician_type` value into a user-facing role

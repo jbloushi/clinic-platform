@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDataProvider } from '@/lib/data';
 import { getBookableService, getServiceSpecialistIds } from '@/lib/data/service-catalog';
+import { getBranchBySlug, restrictToBranch } from '@/lib/data/reference-repo';
 import type { Slot } from '@/lib/data/types';
 
 /**
  * Aggregated availability for a service: the union of free slots across every
  * eligible specialist, collapsed by identical start/end. The specialist that
- * will actually be booked is decided at commit time (see /api/bookings) —
- * this endpoint intentionally never returns a practitionerId.
+ * will actually be booked is chosen in the next step (see
+ * /api/services/[id]/specialists-for-slot) — this endpoint intentionally never
+ * returns a practitionerId.
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { searchParams } = new URL(req.url);
   const from = searchParams.get('from');
   const to = searchParams.get('to');
+  const branchSlug = searchParams.get('branch');
   if (!from || !to) return NextResponse.json({ error: 'from and to are required' }, { status: 400 });
 
   // This endpoint backs the service-search flow only, so doctor-only services
@@ -25,20 +28,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const provider = getDataProvider();
-  const configuredUuids = await getServiceSpecialistIds(id);
-  const eligibleUuids = configuredUuids.length > 0
-    ? configuredUuids
-    : (await provider.getPractitioners({ activeOnly: true })).map((practitioner) => practitioner.id);
+  const branch = branchSlug ? await getBranchBySlug(branchSlug) : null;
+
+  const roster = await provider.getPractitioners({ activeOnly: true });
+  const configuredUuids = await getServiceSpecialistIds(service.id);
+  const eligible = configuredUuids.length > 0
+    ? roster.filter((practitioner) => configuredUuids.includes(practitioner.id))
+    : roster;
+  // Only offer times the patient can actually be seen at, at the branch they chose.
+  const available = await restrictToBranch(eligible, branch?.id);
+
   const entries = await Promise.all(
-    eligibleUuids.map(async (uuid) => [uuid, await provider.getAvailableSlots(uuid, from, to, service.durationMinutes)] as const),
+    available.map(
+      async (practitioner) =>
+        [
+          practitioner.id,
+          await provider.getAvailableSlots(practitioner.id, from, to, service.durationMinutes, {
+            branchId: branch?.id,
+          }),
+        ] as const,
+    ),
   );
-  const byUuid = Object.fromEntries(entries);
 
   // Union by identical [start, end) — the patient only sees "9:00 AM is open,"
   // not which of the N eligible specialists holds it.
   const merged = new Map<string, Slot>();
-  for (const uuid of eligibleUuids) {
-    for (const slot of byUuid[uuid] ?? []) {
+  for (const [, slots] of entries) {
+    for (const slot of slots) {
       if (!slot.available) continue;
       const key = `${slot.start}|${slot.end}`;
       if (!merged.has(key)) merged.set(key, { ...slot, practitionerId: '' });

@@ -13,6 +13,7 @@ const config: Config = {
         primary: {
           DEFAULT: 'hsl(var(--primary))',
           foreground: 'hsl(var(--primary-foreground))',
+          dark: 'hsl(var(--primary-dark))',
         },
         secondary: {
           DEFAULT: 'hsl(var(--secondary))',
@@ -39,6 +40,8 @@ const config: Config = {
           soft: 'hsl(var(--surface-soft))',
         },
         canvas: 'hsl(var(--canvas))',
+        divider: 'hsl(var(--divider))',
+        placeholder: 'hsl(var(--placeholder))',
         // Status colors — single source of truth for StatusBadge
         status: {
           held: 'hsl(var(--status-held))',
@@ -49,15 +52,47 @@ const config: Config = {
           cancelled: 'hsl(var(--status-cancelled))',
           noshow: 'hsl(var(--status-noshow))',
         },
+        /**
+         * Warm status tints from the approved design: a teal family for
+         * confirmed/positive states and a gold family for awaiting-action
+         * states. Paired surface + border so a badge or banner never has to
+         * hard-code a hex.
+         */
+        tint: {
+          teal: 'hsl(var(--tint-teal))',
+          'teal-border': 'hsl(var(--tint-teal-border))',
+          'teal-ink': 'hsl(var(--primary))',
+          gold: 'hsl(var(--tint-gold))',
+          'gold-border': 'hsl(var(--tint-gold-border))',
+          'gold-ink': 'hsl(var(--accent-foreground))',
+          neutral: 'hsl(var(--muted))',
+          'neutral-border': 'hsl(var(--tint-neutral-border))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        // Design-system shapes: cards 14–16px, controls 11–12px.
+        card: 'var(--radius-card)',
+        control: 'var(--radius-control)',
       },
       fontFamily: {
-        sans: ['IBM Plex Sans', 'Noto Sans Arabic', 'Segoe UI', 'Arial', 'system-ui', 'sans-serif'],
-        editorial: ['Source Serif 4', 'Noto Naskh Arabic', 'Geeza Pro', 'Georgia', 'serif'],
+        sans: [
+          'var(--font-sans-latin)',
+          'var(--font-sans-arabic)',
+          'Segoe UI',
+          'Arial',
+          'system-ui',
+          'sans-serif',
+        ],
+        editorial: [
+          'var(--font-editorial-latin)',
+          'var(--font-editorial-arabic)',
+          'Geeza Pro',
+          'Georgia',
+          'serif',
+        ],
       },
     },
   },

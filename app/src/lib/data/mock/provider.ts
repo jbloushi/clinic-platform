@@ -4,6 +4,7 @@ import type {
   AppointmentQuery,
   AppointmentStatus,
   Encounter,
+  Facility,
   MedicalHistory,
   Patient,
   Practitioner,
@@ -38,6 +39,17 @@ let practitioners: Practitioner[] = [
   availability: availability.map((rule) => ({ ...rule })),
 }));
 
+/**
+ * Two synthetic clinic locations so branch selection, filtering and the ops
+ * linking screen all behave in mock mode. Ids are numeric strings because
+ * OpenEMR facility ids are numeric and `pc_facility` stores them that way.
+ */
+let facilities: Facility[] = [
+  { id: '9001', name: 'Hawally branch', address: 'Hawally, Kuwait', active: true },
+  { id: '9002', name: 'Jahra branch', address: 'Jahra, Kuwait', active: true },
+];
+let facilitySequence = 9002;
+
 let patients: Patient[] = Array.from({ length: 25 }, (_, index) => ({
   id: `mock-patient-${index + 1}`,
   openemrPid: String(1000 + index),
@@ -49,7 +61,43 @@ let patients: Patient[] = Array.from({ length: 25 }, (_, index) => ({
   createdAt: '2026-01-01T08:00:00.000Z',
 }));
 
-let appointments: Appointment[] = [];
+/**
+ * A day of synthetic appointments so the doctor screens — today's schedule and
+ * the consultation workspace — have something to show in mock mode. Dated
+ * relative to today so they don't age out. Mock-mode only; nothing here reaches
+ * an OpenEMR-backed environment.
+ */
+function seedAppointments(): Appointment[] {
+  const at = (hour: number, minute: number) => {
+    const date = new Date();
+    date.setHours(hour, minute, 0, 0);
+    return date.toISOString();
+  };
+
+  return [
+    ['mock-appointment-1', 'mock-patient-1', 'mock-practitioner-2', 9, 'Obesity consult'],
+    ['mock-appointment-2', 'mock-patient-2', 'mock-practitioner-2', 10, 'Follow-up'],
+    ['mock-appointment-3', 'mock-patient-3', 'mock-practitioner-1', 11, 'Bariatric review'],
+  ].map(([id, patientId, practitionerId, hour, reason]) => {
+    const patient = patients.find((candidate) => candidate.id === patientId);
+    const practitioner = practitioners.find((candidate) => candidate.id === practitionerId);
+    return {
+      id: String(id),
+      patientId: String(patientId),
+      patientName: patient ? `${patient.firstName} ${patient.lastName}` : undefined,
+      practitionerId: String(practitionerId),
+      practitionerName: practitioner
+        ? `${practitioner.title} ${practitioner.firstName} ${practitioner.lastName}`
+        : undefined,
+      start: at(Number(hour), 0),
+      end: at(Number(hour), 30),
+      status: 'confirmed' as const,
+      reason: String(reason),
+    };
+  });
+}
+
+let appointments: Appointment[] = seedAppointments();
 let sequence = 100;
 
 function clone<T>(value: T): T {
@@ -59,9 +107,21 @@ function clone<T>(value: T): T {
 function medicalHistory(patientId: string): MedicalHistory {
   return {
     problems: [{ label: 'Synthetic follow-up condition', active: true, onsetDate: '2025-10-01' }],
-    allergies: [{ substance: 'No known drug allergies' }],
+    // A synthetic allergen rather than a "no known allergies" placeholder: an
+    // empty list is how "none recorded" is represented, and the safety header
+    // treats anything in this array as a genuine alert.
+    allergies: [{ substance: 'Synthetic allergen', reaction: 'Demo reaction only' }],
     medications: [{ name: 'Synthetic medication', dosage: 'Demo only', active: true }],
-    vitals: [{ date: '2026-07-20T09:00:00.000Z', systolic: 118, diastolic: 76, pulse: 72 }],
+    vitals: [
+      {
+        date: '2026-07-20T09:00:00.000Z',
+        systolic: 118,
+        diastolic: 76,
+        pulse: 72,
+        weightKg: 84,
+        heightCm: 172,
+      },
+    ],
     documents: [{ id: `document-${patientId}`, title: 'Synthetic visit summary', category: 'Visit summary', date: '2026-07-20T10:00:00.000Z' }],
   };
 }
@@ -80,7 +140,16 @@ export const mockProvider: DataProvider = {
     return clone(patients.find((patient) => patient.id === id) ?? null);
   },
   async createPatient(data) {
-    const patient: Patient = { ...data, id: `mock-patient-${++sequence}`, createdAt: new Date().toISOString() };
+    // Random rather than sequential: the in-memory roster resets when the dev
+    // server restarts, but PatientIdentity rows in the platform DB survive it.
+    // A counter would hand out ids already claimed by an earlier session and
+    // collide on PatientIdentity.openemrPatientUuid — OpenEMR issues UUIDs that
+    // never repeat, so mock ids shouldn't either.
+    const patient: Patient = {
+      ...data,
+      id: `mock-patient-${crypto.randomUUID()}`,
+      createdAt: new Date().toISOString(),
+    };
     patients.push(patient);
     return clone(patient);
   },
@@ -112,13 +181,31 @@ export const mockProvider: DataProvider = {
     if (!practitioner) throw new Error('Practitioner not found');
     practitioner.active = active;
   },
-  async getAvailableSlots(practitionerId, from, to, slotMinutes) {
+  async getFacilities() {
+    return clone(facilities);
+  },
+  async getFacilityById(id) {
+    return clone(facilities.find((facility) => facility.id === id) ?? null);
+  },
+  async createFacility(data) {
+    const facility: Facility = { id: String(++facilitySequence), ...data, active: true };
+    facilities.push(facility);
+    return clone(facility);
+  },
+  async getAvailableSlots(practitionerId, from, to, slotMinutes, opts) {
     const practitioner = practitioners.find((item) => item.id === practitionerId && item.active);
     if (!practitioner) return [];
     const slots: Slot[] = [];
     for (let cursor = new Date(`${from}T00:00:00.000Z`); cursor <= new Date(`${to}T00:00:00.000Z`); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
       const date = cursor.toISOString().slice(0, 10);
-      for (const rule of practitioner.availability.filter((item) => item.dayOfWeek === cursor.getUTCDay())) {
+      const dayRules = practitioner.availability.filter(
+        (item) =>
+          item.dayOfWeek === cursor.getUTCDay() &&
+          // Same convention as the platform repo: a rule without a branch
+          // applies everywhere.
+          (!opts?.branchId || !item.branchId || item.branchId === opts.branchId),
+      );
+      for (const rule of dayRules) {
         const minutes = slotMinutes ?? rule.slotMinutes;
         const startOfDay = Date.parse(`${date}T${rule.startTime}:00.000Z`);
         const endOfDay = Date.parse(`${date}T${rule.endTime}:00.000Z`);
@@ -149,7 +236,10 @@ export const mockProvider: DataProvider = {
     if (!practitioner || !patient) throw new Error('Patient or practitioner not found');
     const conflict = appointments.some((item) => item.practitionerId === data.practitionerId && item.status !== 'cancelled' && Date.parse(item.start) < Date.parse(data.end) && Date.parse(item.end) > Date.parse(data.start));
     if (conflict) throw new Error('Appointment slot is no longer available');
-    const appointment: Appointment = { ...data, id: `mock-appointment-${++sequence}`, status: data.status ?? 'confirmed', patientName: `${patient.firstName} ${patient.lastName}`, practitionerName: `${practitioner.title} ${practitioner.firstName} ${practitioner.lastName}` };
+    // Random for the same reason as patient ids: BookingHold rows persist
+    // across a dev-server restart and look appointments up by this id, so a
+    // reused one would point an old booking at a new appointment.
+    const appointment: Appointment = { ...data, id: `mock-appointment-${crypto.randomUUID()}`, status: data.status ?? 'confirmed', patientName: `${patient.firstName} ${patient.lastName}`, practitionerName: `${practitioner.title} ${practitioner.firstName} ${practitioner.lastName}` };
     appointments.push(appointment);
     return clone(appointment);
   },

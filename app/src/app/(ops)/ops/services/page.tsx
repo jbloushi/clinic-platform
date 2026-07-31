@@ -12,6 +12,8 @@ import { getServiceSpecialistUuids } from '@/lib/data/platform-repo';
 import { formatCurrency } from '@/lib/utils';
 import { NewServiceDialog } from './new-service-dialog';
 import { EditSpecialistsDialog, type SpecialistOption } from './edit-specialists-dialog';
+import { EditServiceDialog } from './edit-service-dialog';
+import { DeleteServiceButton } from './delete-service-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,12 +32,19 @@ async function toggleServiceSearch(id: string, showInServiceSearch: boolean) {
 }
 
 export default async function ServicesPage() {
-  const services = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
+  const services = await prisma.service.findMany({
+    orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+    include: { department: { select: { id: true, nameEn: true } } },
+  });
 
   const dp = getDataProvider();
-  const [specialists, assignments] = await Promise.all([
+  const [specialists, assignments, departments] = await Promise.all([
     dp.getPractitioners({ activeOnly: true }).catch(() => []),
     Promise.all(services.map((s) => getServiceSpecialistUuids(s.id))),
+    prisma.department.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { nameEn: 'asc' }],
+      select: { id: true, nameEn: true },
+    }),
   ]);
   const specialistOptions: SpecialistOption[] = specialists.map((sp) => ({
     uuid: sp.id,
@@ -68,10 +77,11 @@ export default async function ServicesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead>Department</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Fee</TableHead>
                 <TableHead>Assigned to</TableHead>
-                <TableHead>Search</TableHead>
+                <TableHead>Visibility</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -81,7 +91,24 @@ export default async function ServicesPage() {
                 const assignedUuids = assignedUuidsByService.get(s.id) ?? [];
                 return (
                   <TableRow key={s.id}>
-                    <TableCell className="font-medium">{s.name}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{s.name}</div>
+                      {s.nameAr && (
+                        <div className="text-xs text-muted-foreground" dir="rtl">
+                          {s.nameAr}
+                        </div>
+                      )}
+                      <div className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                        /{s.slug}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {s.department ? (
+                        <span className="text-xs">{s.department.nameEn}</span>
+                      ) : (
+                        <span className="text-xs italic">Uncategorised</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-muted-foreground">{s.durationMinutes} min</TableCell>
                     <TableCell>{formatCurrency(s.priceMinor, s.currency)}</TableCell>
                     <TableCell className="text-muted-foreground">
@@ -94,11 +121,14 @@ export default async function ServicesPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {s.showInServiceSearch ? (
-                        <Badge variant="secondary">In search</Badge>
-                      ) : (
-                        <Badge variant="outline">Doctor-only</Badge>
-                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {s.showInServiceSearch ? (
+                          <Badge variant="secondary">In search</Badge>
+                        ) : (
+                          <Badge variant="outline">Doctor-only</Badge>
+                        )}
+                        {s.publishedOnWeb && <Badge variant="secondary">On website</Badge>}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {s.active ? (
@@ -115,6 +145,7 @@ export default async function ServicesPage() {
                           allSpecialists={specialistOptions}
                           selectedUuids={assignedUuids}
                         />
+                        <EditServiceDialog service={s} departments={departments} />
                         <form action={async () => { 'use server'; await toggleServiceSearch(s.id, !s.showInServiceSearch); }}>
                           <Button type="submit" size="sm" variant="ghost">
                             {s.showInServiceSearch ? 'Hide from search' : 'Show in search'}
@@ -125,6 +156,7 @@ export default async function ServicesPage() {
                             {s.active ? 'Deactivate' : 'Activate'}
                           </Button>
                         </form>
+                        <DeleteServiceButton serviceId={s.id} serviceName={s.name} />
                       </div>
                     </TableCell>
                   </TableRow>

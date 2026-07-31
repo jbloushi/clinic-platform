@@ -5,6 +5,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { scryptSync, randomBytes } from 'node:crypto';
+import { slugify } from '../src/lib/slug';
 
 const prisma = new PrismaClient();
 
@@ -49,7 +50,18 @@ async function upsertService(
       data: { durationMinutes, priceMinor, showInServiceSearch, currency: 'KWD' },
     });
   } else {
-    await prisma.service.create({ data: { name, durationMinutes, priceMinor, showInServiceSearch, currency: 'KWD' } });
+    await prisma.service.create({
+      data: {
+        name,
+        // These are internal visit types, so the slug only has to be stable and
+        // unique; the public catalogue's slugs come from the backfill.
+        slug: slugify(name),
+        durationMinutes,
+        priceMinor,
+        showInServiceSearch,
+        currency: 'KWD',
+      },
+    });
   }
 }
 

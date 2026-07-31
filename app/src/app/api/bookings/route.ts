@@ -5,6 +5,9 @@ import { getSession } from '@/lib/auth/session';
 import { getDataProvider } from '@/lib/data';
 import { normalizeMobile } from '@/lib/auth/mobile';
 import { getBookableService, getEligibleServicesForSpecialist, getServiceSpecialistIds } from '@/lib/data/service-catalog';
+import { ensureEmrPatientId, slotKey } from '@/lib/data/patient-link';
+import { getBranchBySlug, restrictToBranch } from '@/lib/data/reference-repo';
+import { notifyBookingConfirmed } from '@/lib/notify';
 
 const bodySchema = z.object({
   // Omitted from /book/service — the specialist is auto-assigned server-side
@@ -20,6 +23,13 @@ const bodySchema = z.object({
   // 'card' = mock online payment (marked paid). 'cash' = pay at clinic (COD) —
   // slot is reserved now, payment recorded as pending.
   paymentMethod: z.enum(['card', 'cash']).default('card'),
+  // Set when this visit continues an earlier one, so the chart can show them as
+  // one case. Validated below against the caller's own bookings — an id from
+  // someone else's history would otherwise leak that it exists.
+  followUpFromBookingId: z.string().min(1).optional(),
+  // Display-only: names the location in the confirmation message. The visit
+  // itself is located by the practitioner's facility in OpenEMR.
+  branch: z.string().min(1).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -33,30 +43,39 @@ export async function POST(req: NextRequest) {
   const service = await getBookableService(parsed.data.serviceId);
   if (!service) return NextResponse.json({ error: 'invalid_service' }, { status: 400 });
 
+  // The branch is where the visit happens, so it has to resolve to a real,
+  // published location before anything is written.
+  const bookingBranch = parsed.data.branch ? await getBranchBySlug(parsed.data.branch) : null;
+  if (parsed.data.branch && (!bookingBranch || !bookingBranch.published)) {
+    return NextResponse.json({ error: 'invalid_branch' }, { status: 400 });
+  }
+
   const dp = getDataProvider();
-  let identity = await prisma.patientIdentity.findUnique({ where: { mobile } });
+  const identity = await prisma.patientIdentity.findUnique({ where: { mobile } });
   if (!identity) return NextResponse.json({ error: 'identity_missing' }, { status: 401 });
 
-  // Ensure a patient exists in OpenEMR and remember the mapping.
-  let openemrUuid = identity.openemrPatientUuid;
-  if (!openemrUuid) {
-    try {
-      const created = await dp.createPatient({
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        mobile,
-        sex: 'unknown',
-      });
-      openemrUuid = created.id;
-      identity = await prisma.patientIdentity.update({
-        where: { id: identity.id },
-        data: { openemrPatientUuid: openemrUuid, firstName: parsed.data.firstName, lastName: parsed.data.lastName },
-      });
-      session.patient = { ...session.patient, firstName: parsed.data.firstName, lastName: parsed.data.lastName, openemrPatientUuid: openemrUuid };
-      await session.save();
-    } catch (e: any) {
-      return NextResponse.json({ error: `patient_create_failed: ${e?.message ?? e}` }, { status: 502 });
-    }
+  // Ensure a live EMR record backs this identity, registering one if the stored
+  // mapping has gone stale. See ensureEmrPatientId for why it can.
+  let openemrUuid: string;
+  try {
+    const resolved = await ensureEmrPatientId(identity.id, {
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+    });
+    if (!resolved) return NextResponse.json({ error: 'patient_create_failed' }, { status: 502 });
+    openemrUuid = resolved;
+  } catch (e: any) {
+    return NextResponse.json({ error: `patient_create_failed: ${e?.message ?? e}` }, { status: 502 });
+  }
+
+  if (session.patient.openemrPatientUuid !== openemrUuid) {
+    session.patient = {
+      ...session.patient,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
+      openemrPatientUuid: openemrUuid,
+    };
+    await session.save();
   }
 
   // Resolve candidate specialists. Explicit pick from /doctors/[id] is a
@@ -77,16 +96,41 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // A follow-up must continue a visit this same patient actually had. Checking
+  // ownership rather than mere existence keeps an arbitrary id from confirming
+  // that someone else's booking exists.
+  let followUpFromId: string | undefined;
+  if (parsed.data.followUpFromBookingId) {
+    const original = await prisma.bookingHold.findFirst({
+      where: { id: parsed.data.followUpFromBookingId, patientIdentityId: identity.id },
+      select: { id: true },
+    });
+    if (!original) return NextResponse.json({ error: 'invalid_follow_up' }, { status: 400 });
+    followUpFromId = original.id;
+  }
+
   const configuredUuids = await getServiceSpecialistIds(service.id);
-  const eligibleUuids = configuredUuids.length > 0
-    ? configuredUuids
-    : (await dp.getPractitioners({ activeOnly: true })).map((practitioner) => practitioner.id);
+  const roster = await dp.getPractitioners({ activeOnly: true });
+  const configuredEligible =
+    configuredUuids.length > 0
+      ? roster.filter((practitioner) => configuredUuids.includes(practitioner.id))
+      : roster;
+  // The same restriction the pickers applied, re-checked at commit: a stale or
+  // crafted request must not book a doctor who doesn't work at this branch.
+  const eligibleUuids = (await restrictToBranch(configuredEligible, bookingBranch?.id)).map(
+    (practitioner) => practitioner.id,
+  );
+  if (parsed.data.practitionerId && !eligibleUuids.includes(parsed.data.practitionerId)) {
+    return NextResponse.json({ error: 'practitioner_not_at_branch' }, { status: 400 });
+  }
   const candidatePool = parsed.data.practitionerId ? [parsed.data.practitionerId] : eligibleUuids;
   const targetDate = parsed.data.start.slice(0, 10);
   const availability = await Promise.all(
     candidatePool.map(async (candidate) => ({
       candidate,
-      slots: await dp.getAvailableSlots(candidate, targetDate, targetDate, service.durationMinutes),
+      slots: await dp.getAvailableSlots(candidate, targetDate, targetDate, service.durationMinutes, {
+        branchId: bookingBranch?.id,
+      }),
     })),
   );
   const candidates = availability
@@ -113,8 +157,14 @@ export async function POST(req: NextRequest) {
           startAt: new Date(parsed.data.start),
           endAt: new Date(parsed.data.end),
           status: 'confirmed',
+          activeSlotKey: slotKey(candidate, parsed.data.start),
           reason: parsed.data.reason,
           holdExpiresAt: new Date(parsed.data.start),
+          followUpFromBookingId: followUpFromId,
+          branchId: bookingBranch?.id,
+          // Snapshot the facility actually used, so the record of where this
+          // visit happened survives the branch later being re-pointed.
+          openemrFacilityId: bookingBranch?.openemrFacilityId ?? null,
         },
       });
       practitionerId = candidate;
@@ -135,6 +185,7 @@ export async function POST(req: NextRequest) {
     const appt = await dp.createAppointment({
       patientId: openemrUuid!,
       practitionerId,
+      facilityId: bookingBranch?.openemrFacilityId ?? undefined,
       start: parsed.data.start,
       end: parsed.data.end,
       reason: parsed.data.reason,
@@ -166,9 +217,38 @@ export async function POST(req: NextRequest) {
       actor: `patient:${identity.id}`,
       action: 'booking.confirmed',
       target: booking.id,
-      metadata: JSON.stringify({ openemrAppointmentId, practitionerId, paymentMethod: parsed.data.paymentMethod }),
+      metadata: JSON.stringify({
+        openemrAppointmentId,
+        practitionerId,
+        paymentMethod: parsed.data.paymentMethod,
+        followUpFromBookingId: followUpFromId,
+      }),
     },
   });
 
+  // Fire-and-forget: the appointment exists regardless of whether the
+  // confirmation message lands, and the patient is about to see the
+  // confirmation screen either way.
+  const doctor = await dp.getPractitionerById(practitionerId).catch(() => null);
+  notifyBookingConfirmed({
+    mobile,
+    patientName: `${parsed.data.firstName} ${parsed.data.lastName}`.trim(),
+    doctorName: doctor
+      ? `${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim()
+      : 'your specialist',
+    when: formatVisitTime(parsed.data.start),
+    branchName: bookingBranch?.nameEn ?? 'the clinic',
+  });
+
   return NextResponse.json({ ok: true, bookingId: booking.id });
+}
+
+/** Human-readable visit time for a notification body. */
+function formatVisitTime(iso: string): string {
+  const date = new Date(iso);
+  return `${date.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  })} at ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 }

@@ -38,8 +38,25 @@ export interface Patient {
   createdAt?: ISODateTime;
 }
 
+/**
+ * A clinic location as OpenEMR knows it. Appointments carry its numeric id in
+ * `pc_facility`, which is what makes it the anchor for a Branch — the platform
+ * `Branch` row holds the bilingual name and publishing state OpenEMR has no
+ * field for, and points here.
+ */
+export interface Facility {
+  /** Numeric OpenEMR `facility.id`. */
+  id: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  active: boolean;
+}
+
 export interface Practitioner {
   id: string;                       // OpenEMR uuid
+  /** Numeric OpenEMR `facility.id` this practitioner is assigned to, if any. */
+  facilityId?: string;
   openemrNumericId?: string;        // numeric user id (needed for pc_aid in appointment writes)
   firstName: string;
   lastName: string;
@@ -59,6 +76,8 @@ export interface AvailabilityRule {
   startTime: string;                // "09:00"
   endTime: string;                  // "13:00"
   slotMinutes: number;
+  /** Platform Branch id. Absent means the rule applies at every branch. */
+  branchId?: string;
 }
 
 export interface Slot {

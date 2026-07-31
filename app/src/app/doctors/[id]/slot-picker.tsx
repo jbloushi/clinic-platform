@@ -1,205 +1,173 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Sunrise, Sun, Sunset } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { EmptyState } from '@/components/domain/states';
-import { cn } from '@/lib/utils';
+import { AvailabilityDayPicker, type AvailabilityDay } from '@/components/domain/availability-day-picker';
+import { TimeSlotPicker } from '@/components/domain/time-slot-picker';
+import { cn, formatPrice, formatTime } from '@/lib/utils';
 import type { Slot } from '@/lib/data/types';
 
+const WINDOW_DAYS = 7;
+
+/**
+ * Day-and-time selection for a specialist, with the sticky booking summary the
+ * design puts at the bottom of the screen.
+ *
+ * The server loads a seven-day window; picking a day inside it is instant local
+ * state, while the full-calendar input navigates to reload the window around a
+ * new date. Selecting a time never commits anything — the patient still has to
+ * press Continue, and the server revalidates the slot before holding it.
+ */
 export function SlotPicker({
   practitionerId,
   practitionerName,
   from,
   slots,
+  consultationFeeMinor,
+  currency,
+  branchSlug,
+  followUpFrom,
+  serviceId,
 }: {
   practitionerId: string;
   practitionerName: string;
+  /** First day of the loaded window, "YYYY-MM-DD". */
   from: string;
   slots: Slot[];
+  consultationFeeMinor?: number;
+  currency?: string;
+  /** Already-chosen branch. When absent, /book asks for one before the form. */
+  branchSlug?: string;
+  /** Booking this visit continues, carried through to the commit. */
+  followUpFrom?: string;
+  serviceId?: string;
 }) {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState<string>(() => firstDateWithAvailability(slots, from));
 
   const byDate = useMemo(() => {
-    const m = new Map<string, Slot[]>();
-    for (const s of slots) {
-      const d = s.start.slice(0, 10);
-      const arr = m.get(d) ?? [];
-      arr.push(s);
-      m.set(d, arr);
+    const map = new Map<string, Slot[]>();
+    for (const slot of slots) {
+      const day = slot.start.slice(0, 10);
+      const list = map.get(day) ?? [];
+      list.push(slot);
+      map.set(day, list);
     }
-    return m;
+    return map;
   }, [slots]);
 
-  const days = useMemo(() => {
-    const list: string[] = [];
-    const start = new Date(from);
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(start);
-      d.setDate(start.getDate() + i);
-      list.push(d.toISOString().slice(0, 10));
+  const days = useMemo<AvailabilityDay[]>(() => {
+    const list: AvailabilityDay[] = [];
+    const start = new Date(`${from}T00:00:00`);
+    for (let i = 0; i < WINDOW_DAYS; i++) {
+      const day = new Date(start);
+      day.setDate(start.getDate() + i);
+      const date = toDateKey(day);
+      list.push({
+        date,
+        count: (byDate.get(date) ?? []).filter((slot) => slot.available).length,
+      });
     }
     return list;
-  }, [from]);
+  }, [from, byDate]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const daySlots = (byDate.get(selectedDate) ?? []).filter((s) => s.available);
-  const buckets = useMemo(() => bucketSlots(daySlots), [daySlots]);
+  const [selectedDate, setSelectedDate] = useState(
+    () => days.find((day) => day.count > 0)?.date ?? from,
+  );
+  const [selectedSlot, setSelectedSlot] = useState<Slot | null>(null);
 
-  function shift(delta: number) {
-    const d = new Date(from);
-    d.setDate(d.getDate() + delta);
-    router.push(`/doctors/${practitionerId}?date=${d.toISOString().slice(0, 10)}`);
+  const daySlots = byDate.get(selectedDate) ?? [];
+  const windowEnd = days[days.length - 1]?.date;
+
+  /** Context that must survive both a window reload and the hop to /book. */
+  const carried = new URLSearchParams();
+  if (branchSlug) carried.set('branch', branchSlug);
+  if (followUpFrom) carried.set('followUpFrom', followUpFrom);
+  if (serviceId) carried.set('serviceId', serviceId);
+  const carriedQuery = carried.size ? `&${carried}` : '';
+
+  function chooseDate(date: string) {
+    // Outside the loaded window: reload around the new date.
+    if (date < from || (windowEnd && date > windowEnd)) {
+      router.push(`/doctors/${practitionerId}?date=${date}${carriedQuery}#booking`);
+      return;
+    }
+    setSelectedDate(date);
+    setSelectedSlot(null);
   }
 
-  return (
-    <div className="space-y-4">
-      {/* Day strip */}
-      <div className="flex items-stretch gap-2">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => shift(-7)}
-          aria-label="Previous week"
-          className="shrink-0"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <div className="grid flex-1 grid-cols-7 gap-1.5">
-          {days.map((d) => {
-            const dayAvailable = (byDate.get(d) ?? []).filter((s) => s.available);
-            const count = dayAvailable.length;
-            const active = d === selectedDate;
-            const isToday = d === today;
-            const date = new Date(d);
-            const disabled = count === 0;
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => !disabled && setSelectedDate(d)}
-                disabled={disabled}
-                aria-pressed={active}
-                aria-label={`${date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}${
-                  count ? `, ${count} slots available` : ', no slots'
-                }`}
-                className={cn(
-                  'group relative flex flex-col items-center rounded-lg border px-2 py-2.5 text-center transition-all',
-                  active && !disabled && 'border-primary bg-primary/10 text-primary shadow-sm',
-                  !active && !disabled && 'hover:border-primary/40 hover:bg-accent',
-                  disabled && 'cursor-not-allowed opacity-50',
-                )}
-              >
-                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                  {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                </span>
-                <span className="mt-0.5 text-lg font-semibold leading-none tabular-nums">
-                  {date.getDate()}
-                </span>
-                {isToday && (
-                  <span className="mt-1 text-[9px] font-semibold uppercase tracking-widest text-primary">
-                    Today
-                  </span>
-                )}
-                {!isToday && count > 0 && (
-                  <span className="mt-1 text-[10px] tabular-nums text-muted-foreground">
-                    {count} slot{count === 1 ? '' : 's'}
-                  </span>
-                )}
-                {!isToday && count === 0 && (
-                  <span className="mt-1 text-[10px] text-muted-foreground">—</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => shift(7)}
-          aria-label="Next week"
-          className="shrink-0"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+  function goToBooking() {
+    if (!selectedSlot) return;
+    router.push(
+      `/book?practitionerId=${practitionerId}&start=${encodeURIComponent(
+        selectedSlot.start,
+      )}&end=${encodeURIComponent(selectedSlot.end)}${carriedQuery}`,
+    );
+  }
 
-      {/* Slots grouped by time-of-day */}
-      <Card className="p-4">
-        {daySlots.length === 0 ? (
-          <EmptyState
-            title="No available slots on this day"
-            description="Try a different day this week or the following week."
-          />
-        ) : (
-          <div className="space-y-4">
-            {buckets.map(
-              (b) =>
-                b.slots.length > 0 && (
-                  <div key={b.key}>
-                    <div className="mb-2 flex items-center gap-2">
-                      <b.icon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-                      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {b.label}
-                      </span>
-                      <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                        {b.slots.length} available
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4 md:grid-cols-6">
-                      {b.slots.map((s) => {
-                        const label = new Date(s.start).toLocaleTimeString([], {
-                          hour: 'numeric',
-                          minute: '2-digit',
-                        });
-                        return (
-                          <Link
-                            key={s.start}
-                            href={`/book?practitionerId=${practitionerId}&start=${encodeURIComponent(
-                              s.start,
-                            )}&end=${encodeURIComponent(s.end)}`}
-                            className="group flex h-10 items-center justify-center rounded-md border bg-card text-sm font-medium tabular-nums text-foreground press-scale hover:border-primary hover:bg-primary hover:text-primary-foreground hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          >
-                            {label}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ),
-            )}
-          </div>
-        )}
-        <p className="mt-4 border-t pt-3 text-xs text-muted-foreground">
-          You&apos;ll pick a service and pay on the next step. Booking with {practitionerName} is confirmed instantly.
-        </p>
-      </Card>
+  const selectedDayLabel = new Date(`${selectedDate}T00:00:00`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+
+  return (
+    <div>
+      <h2 className="mb-2.5 text-[14.5px] font-semibold">Choose a day</h2>
+      <AvailabilityDayPicker
+        days={days}
+        value={selectedDate}
+        onSelect={chooseDate}
+        min={toDateKey(new Date())}
+      />
+
+      <h2 className="mb-2.5 mt-6 text-[14.5px] font-semibold">Available times</h2>
+      <TimeSlotPicker
+        slots={daySlots}
+        selectedStart={selectedSlot?.start}
+        onSelect={setSelectedSlot}
+        emptyDescription={`${practitionerName} has no open times on ${selectedDayLabel}. Try another day or pick a date from the calendar.`}
+      />
+
+      <div className="sticky-action-bar -mx-5 mt-7 flex items-center gap-3.5 px-5 pt-3.5 md:-mx-8 md:px-8">
+        <div className="min-w-0 flex-1">
+          {selectedSlot ? (
+            <>
+              <p className="text-[11px] text-muted-foreground">
+                {selectedDayLabel} · {formatTime(selectedSlot.start)}
+              </p>
+              <p className="truncate text-[14px] font-semibold">
+                {consultationFeeMinor && consultationFeeMinor > 0
+                  ? formatPrice(consultationFeeMinor, currency)
+                  : 'Consultation'}
+              </p>
+            </>
+          ) : (
+            <p className="text-[12.5px] text-muted-foreground">
+              Select a time to continue
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={goToBooking}
+          disabled={!selectedSlot}
+          className={cn(
+            'press-scale flex min-h-[48px] flex-1 items-center justify-center rounded-[13px] px-5 text-[15px] font-semibold transition-colors',
+            selectedSlot
+              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'cursor-not-allowed bg-muted text-muted-foreground',
+          )}
+        >
+          Continue
+        </button>
+      </div>
     </div>
   );
 }
 
-function firstDateWithAvailability(slots: Slot[], fallback: string): string {
-  for (const s of slots) if (s.available) return s.start.slice(0, 10);
-  return fallback;
-}
-
-function bucketSlots(slots: Slot[]) {
-  const morning: Slot[] = [];
-  const afternoon: Slot[] = [];
-  const evening: Slot[] = [];
-  for (const s of slots) {
-    const h = new Date(s.start).getHours();
-    if (h < 12) morning.push(s);
-    else if (h < 17) afternoon.push(s);
-    else evening.push(s);
-  }
-  return [
-    { key: 'morning', label: 'Morning', icon: Sunrise, slots: morning },
-    { key: 'afternoon', label: 'Afternoon', icon: Sun, slots: afternoon },
-    { key: 'evening', label: 'Evening', icon: Sunset, slots: evening },
-  ];
+/** Local-date key, avoiding the UTC shift `toISOString()` introduces. */
+function toDateKey(date: Date): string {
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
 }

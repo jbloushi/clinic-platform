@@ -1,18 +1,21 @@
 import { env } from './env';
 
 /**
- * Chatwoot (inbox.mawthook.io) client — sends OTP codes over WhatsApp via a
- * Chatwoot inbox connected to a WhatsApp channel. Chatwoot itself isn't a
- * message gateway; it proxies to whatever channel (WhatsApp Cloud API, a BSP,
- * etc.) the inbox is wired to. Outbound-first WhatsApp messages (no open 24h
- * session with the recipient) require a Meta-approved template — free-form
- * text will be rejected by WhatsApp regardless of what Chatwoot sends.
+ * Chatwoot (inbox.mawthook.io) — agent-visibility only.
  *
- * Endpoint shapes below follow Chatwoot's public Application API
- * (https://www.chatwoot.com/developers/api/) as of this writing. Not yet
- * exercised against a live inbox/template — verify against the real account
- * once CHATWOOT_* env vars and an approved template are in place, and adjust
- * the request/response shape here if Chatwoot's actual behavior differs.
+ * Chatwoot does not send anything here. Patient messages go out through the
+ * WhatsApp Cloud API (see lib/whatsapp.ts); this module writes a *private note*
+ * onto the patient's conversation recording what was sent. Private notes are
+ * invisible to the patient, so an agent who later picks up the thread can see
+ * that a code or a confirmation already went out — and not repeat it — without
+ * the log itself becoming another message the patient receives.
+ *
+ * Everything here is best-effort by design: failing to annotate a conversation
+ * must never fail the operation it describes. Callers use `logPrivateNote`,
+ * which swallows its own errors.
+ *
+ * Endpoint shapes follow Chatwoot's public Application API
+ * (https://www.chatwoot.com/developers/api/).
  */
 
 export class ChatwootError extends Error {
@@ -25,20 +28,19 @@ export class ChatwootError extends Error {
   }
 }
 
-function assertConfigured() {
-  const missing = [
-    ['CHATWOOT_BASE_URL', env.CHATWOOT_BASE_URL],
-    ['CHATWOOT_ACCOUNT_ID', env.CHATWOOT_ACCOUNT_ID],
-    ['CHATWOOT_API_TOKEN', env.CHATWOOT_API_TOKEN],
-    ['CHATWOOT_WHATSAPP_INBOX_ID', env.CHATWOOT_WHATSAPP_INBOX_ID],
-    ['CHATWOOT_OTP_TEMPLATE_NAME', env.CHATWOOT_OTP_TEMPLATE_NAME],
-  ].filter(([, v]) => !v);
-  if (missing.length) {
-    throw new ChatwootError(500, `Chatwoot WhatsApp OTP not configured — missing ${missing.map(([k]) => k).join(', ')}`);
-  }
+export function isChatwootConfigured(): boolean {
+  return Boolean(
+    env.CHATWOOT_BASE_URL &&
+      env.CHATWOOT_ACCOUNT_ID &&
+      env.CHATWOOT_API_TOKEN &&
+      env.CHATWOOT_WHATSAPP_INBOX_ID,
+  );
 }
 
-async function chatwootFetch<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+async function chatwootFetch<T = unknown>(
+  path: string,
+  opts: { method?: string; body?: unknown } = {},
+): Promise<T> {
   const res = await fetch(`${env.CHATWOOT_BASE_URL.replace(/\/$/, '')}${path}`, {
     method: opts.method ?? 'GET',
     headers: {
@@ -75,32 +77,55 @@ async function findOrCreateContact(mobile: string): Promise<number> {
 }
 
 /**
- * Open (or reuse) a conversation on the WhatsApp inbox and send the OTP as a
- * template message — required for messaging outside an active 24h session.
+ * Reuse this contact's open conversation on the WhatsApp inbox, or start one.
+ *
+ * Reuse matters: a new conversation per note would fragment the patient's
+ * history across dozens of threads, which is the opposite of what the note is
+ * for.
  */
-async function sendOtpTemplateMessage(contactId: number, code: string): Promise<void> {
-  await chatwootFetch(`/api/v1/accounts/${env.CHATWOOT_ACCOUNT_ID}/conversations`, {
-    method: 'POST',
-    body: {
-      inbox_id: Number(env.CHATWOOT_WHATSAPP_INBOX_ID),
-      contact_id: contactId,
-      status: 'open',
-      message: {
-        content: `${code} is your verification code.`,
-        template_params: {
-          name: env.CHATWOOT_OTP_TEMPLATE_NAME,
-          category: 'AUTHENTICATION',
-          language: env.CHATWOOT_OTP_TEMPLATE_LANG,
-          processed_params: { '1': code },
-        },
-      },
+async function findOrCreateConversation(contactId: number): Promise<number> {
+  const existing = await chatwootFetch<{ payload: { id: number; inbox_id: number; status: string }[] }>(
+    `/api/v1/accounts/${env.CHATWOOT_ACCOUNT_ID}/contacts/${contactId}/conversations`,
+  ).catch(() => null);
+
+  const inboxId = Number(env.CHATWOOT_WHATSAPP_INBOX_ID);
+  const open = existing?.payload?.find((c) => c.inbox_id === inboxId && c.status !== 'resolved');
+  if (open) return open.id;
+
+  const created = await chatwootFetch<{ id: number }>(
+    `/api/v1/accounts/${env.CHATWOOT_ACCOUNT_ID}/conversations`,
+    {
+      method: 'POST',
+      body: { inbox_id: inboxId, contact_id: contactId, status: 'open' },
     },
-  });
+  );
+  return created.id;
 }
 
-/** Send a patient login OTP over WhatsApp via Chatwoot. Throws ChatwootError on any failure. */
-export async function sendWhatsAppOtp(mobile: string, code: string): Promise<void> {
-  assertConfigured();
-  const contactId = await findOrCreateContact(mobile);
-  await sendOtpTemplateMessage(contactId, code);
+/**
+ * Record on the patient's Chatwoot conversation what the system just sent them.
+ *
+ * `private: true` is what keeps this an internal annotation rather than an
+ * outbound message — without it Chatwoot would deliver the text to the patient,
+ * duplicating whatever WhatsApp already sent.
+ *
+ * Never include the OTP itself: the note exists so an agent knows a code was
+ * sent, not so they can read it.
+ */
+export async function logPrivateNote(mobile: string, note: string): Promise<void> {
+  if (!isChatwootConfigured()) return;
+  try {
+    const contactId = await findOrCreateContact(mobile);
+    const conversationId = await findOrCreateConversation(contactId);
+    await chatwootFetch(
+      `/api/v1/accounts/${env.CHATWOOT_ACCOUNT_ID}/conversations/${conversationId}/messages`,
+      {
+        method: 'POST',
+        body: { content: note, message_type: 'outgoing', private: true },
+      },
+    );
+  } catch {
+    // Agent visibility is a convenience, not a requirement of the send. The
+    // caller has already delivered the message that matters.
+  }
 }

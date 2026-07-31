@@ -8,7 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/domain/page-header';
 import { getDataProvider } from '@/lib/data';
 import { requireStaff } from '@/lib/auth/guards';
-import { getPractitionerAvailability, getServicesForSpecialist, listServices } from '@/lib/data/platform-repo';
+import { getServicesForSpecialist, listServices } from '@/lib/data/platform-repo';
+import { listAvailabilityRules } from '@/lib/data/availability-repo';
 import { AvailabilityEditor } from './availability-editor';
 import { EditDetailsForm } from './edit-details-form';
 import { ServicesEditor } from './services-editor';
@@ -22,7 +23,7 @@ export default async function ProviderPage({ params }: { params: Promise<{ id: s
   if (!provider) notFound();
 
   const [availability, allServices, assignedServiceIds] = await Promise.all([
-    getPractitionerAvailability(id),
+    listAvailabilityRules(id),
     listServices(),
     getServicesForSpecialist(id),
   ]);

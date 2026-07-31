@@ -526,6 +526,17 @@ function formatUuid(hex: string): string {
 }
 
 async function main() {
+  // This script deletes every patient, appointment and clinical record before
+  // rebuilding them. Two independent guards, because the cost of running it
+  // against real data is unrecoverable and a single env check is one typo away
+  // from being satisfied by accident.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Destructive OpenEMR seed is disabled in production');
+  }
+  if (process.env.ALLOW_DESTRUCTIVE_OPENEMR_SEED !== 'true') {
+    throw new Error('Set ALLOW_DESTRUCTIVE_OPENEMR_SEED=true to continue');
+  }
+
   const url = process.env.OPENEMR_DB_URL;
   if (!url) throw new Error('OPENEMR_DB_URL is not set (add it to app/.env).');
   const conn = await createConnection(url);

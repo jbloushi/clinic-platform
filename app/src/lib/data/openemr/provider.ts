@@ -4,6 +4,7 @@ import type {
   AppointmentQuery,
   AppointmentStatus,
   Encounter,
+  Facility,
   ISODate,
   ISODateTime,
   MedicalHistory,
@@ -16,19 +17,24 @@ import type {
 } from '../types';
 import { fhirJson, restJson } from './client';
 import {
+  fromFacility,
   fromPatient,
   fromPractitioner,
   splitDateTime,
   toAppointment,
   toApptStatusCode,
+  toFacility,
   toPatient,
   toPractitioner,
   type OpenEMRAppointmentDto,
+  type OpenEMRFacilityDto,
   type OpenEMRPatientDto,
   type OpenEMRPractitionerDto,
 } from './mappers';
 import { computeAvailableSlots, generateSlotsFromBooked } from './slots';
-import { getBookingCountsSince, getPractitionerAvailability, getServiceSpecialistUuids } from '../platform-repo';
+import { env } from '@/lib/env';
+import { getBookingCountsSince, getServiceSpecialistUuids } from '../platform-repo';
+import { listAvailabilityRules } from '../availability-repo';
 
 /**
  * Real OpenEMR-backed provider. All calls go through the OAuth2-authenticated client.
@@ -37,11 +43,13 @@ import { getBookingCountsSince, getPractitionerAvailability, getServiceSpecialis
 export const openemrProvider: DataProvider = {
   // -------- Patients --------
   async getPatients(q: PatientQuery = {}): Promise<Paged<Patient>> {
+    const limit = q.limit ?? 50;
+    const offset = q.offset ?? 0;
     const raw = await restJson<any>('/patient', {
-      query: { fname: q.query, limit: q.limit ?? 50, offset: q.offset ?? 0 },
+      query: { fname: q.query, limit, offset },
     });
     const arr = extractArray<OpenEMRPatientDto>(raw);
-    return { items: arr.map(toPatient), total: arr.length };
+    return { items: arr.map(toPatient), total: await countPatients(q, arr.length, offset, limit) };
   },
 
   async getPatientById(id: string): Promise<Patient | null> {
@@ -74,9 +82,13 @@ export const openemrProvider: DataProvider = {
         `${p.firstName} ${p.lastName} ${p.specialty}`.toLowerCase().includes(s),
       );
     }
-    // enrich with availability from platform DB
+    // Availability and pricing both live in the platform DB, not OpenEMR.
     return Promise.all(
-      mapped.map(async (p) => ({ ...p, availability: await getPractitionerAvailability(p.id) })),
+      mapped.map(async (p) => ({
+        ...p,
+        availability: await listAvailabilityRules(p.id),
+        consultationFeeMinor: await entryFeeFor(p.id),
+      })),
     );
   },
 
@@ -86,7 +98,8 @@ export const openemrProvider: DataProvider = {
       const dto = raw?.data ?? raw;
       if (!dto) return null;
       const p = toPractitioner(dto as OpenEMRPractitionerDto);
-      p.availability = await getPractitionerAvailability(p.id);
+      p.availability = await listAvailabilityRules(p.id);
+      p.consultationFeeMinor = await entryFeeFor(p.id);
       return p;
     } catch (e: any) {
       if (e?.status === 404) return null;
@@ -136,15 +149,39 @@ export const openemrProvider: DataProvider = {
     await setPractitionerActive(id, active);
   },
 
+  // -------- Facilities --------
+  async getFacilities(): Promise<Facility[]> {
+    const raw = await restJson<any>('/facility');
+    return extractArray<OpenEMRFacilityDto>(raw).map(toFacility);
+  },
+
+  async getFacilityById(id: string): Promise<Facility | null> {
+    try {
+      const raw = await restJson<any>(`/facility/${encodeURIComponent(id)}`);
+      const dto = raw?.data ?? raw;
+      return dto ? toFacility(dto as OpenEMRFacilityDto) : null;
+    } catch (e: any) {
+      if (e?.status === 404) return null;
+      throw e;
+    }
+  },
+
+  async createFacility(data: { name: string; address?: string; phone?: string }): Promise<Facility> {
+    const res = await restJson<any>('/facility', { method: 'POST', body: fromFacility(data) });
+    const dto = (res?.data ?? res) as OpenEMRFacilityDto;
+    return toFacility(dto);
+  },
+
   // -------- Scheduling --------
   async getAvailableSlots(
     practitionerId: string,
     from: ISODate,
     to: ISODate,
     slotMinutes?: number,
+    opts?: { branchId?: string },
   ): Promise<Slot[]> {
     const [availability, numericId] = await Promise.all([
-      getPractitionerAvailability(practitionerId),
+      listAvailabilityRules(practitionerId, opts?.branchId),
       resolvePractitionerNumericId(practitionerId),
     ]);
     return computeAvailableSlots(practitionerId, availability, from, to, slotMinutes, numericId);
@@ -205,6 +242,7 @@ export const openemrProvider: DataProvider = {
     end: ISODateTime;
     reason?: string;
     status?: AppointmentStatus;
+    facilityId?: string | number;
   }): Promise<Appointment> {
     const startParts = splitDateTime(data.start);
     const endParts = splitDateTime(data.end);
@@ -217,6 +255,7 @@ export const openemrProvider: DataProvider = {
       resolvePractitionerNumericId(data.practitionerId),
       resolvePatientNumericId(data.patientId),
     ]);
+    const facilityId = Number(data.facilityId ?? env.OPENEMR_FACILITY_ID);
 
     const body = {
       pc_eventDate: startParts.date,
@@ -229,9 +268,12 @@ export const openemrProvider: DataProvider = {
       pc_apptstatus: toApptStatusCode(data.status ?? 'confirmed'),
       pc_hometext: data.reason ?? '',
       pc_title: data.reason ?? 'Consultation',
-      pc_catid: 5,
-      pc_facility: 3,
-      pc_billing_location: 3,
+      pc_catid: env.OPENEMR_APPOINTMENT_CATEGORY_ID,
+      // The branch the patient chose decides where the visit happens. The env
+      // default only applies to appointments created without one (walk-ins
+      // entered by reception before branches were configured).
+      pc_facility: facilityId,
+      pc_billing_location: facilityId,
     };
 
     const res = await restJson<any>(`/patient/${encodeURIComponent(patientNumericId)}/appointment`, {
@@ -305,12 +347,7 @@ export const openemrProvider: DataProvider = {
         dosage: e.resource?.dosageInstruction?.[0]?.text,
         active: e.resource?.status === 'active',
       })),
-      vitals: (obs?.entry ?? []).slice(0, 20).map((e: any) => ({
-        date: e.resource?.effectiveDateTime ?? '',
-        // components may include systolic/diastolic; simplistic mapping
-        systolic: undefined,
-        diastolic: undefined,
-      })),
+      vitals: toVitals(obs?.entry ?? []),
       documents: (docs?.entry ?? []).map((e: any) => ({
         id: e.resource?.id,
         title: e.resource?.description ?? e.resource?.type?.text ?? 'Document',
@@ -378,7 +415,7 @@ export async function getAvailableSlotsBulk(
   const result: Record<string, Slot[]> = {};
   await Promise.all(
     specialistUuids.map(async (uuid) => {
-      const availability = await getPractitionerAvailability(uuid);
+      const availability = await listAvailabilityRules(uuid);
       result[uuid] = generateSlotsFromBooked(uuid, availability, from, to, bookedByUuid.get(uuid) ?? [], overrideSlotMinutes);
     }),
   );
@@ -446,6 +483,162 @@ export async function rankSpecialistsForSlot(
     const booked = bookedByUuid.get(uuid) ?? [];
     return !booked.some((b) => b.start < endMs && b.end > startMs);
   });
+}
+
+/**
+ * The "from" price shown against a specialist: the cheapest service they can
+ * actually perform.
+ *
+ * A specialist has no single fee — they perform several services at different
+ * prices — so the card quotes the entry point rather than inventing an average.
+ * Returns 0 when nothing is configured, which the UI reads as "don't show a
+ * price" instead of "this visit is free".
+ */
+async function entryFeeFor(practitionerUuid: string): Promise<number> {
+  try {
+    const { getEligibleServicesForSpecialist } = await import('../service-catalog');
+    const services = await getEligibleServicesForSpecialist(practitionerUuid);
+    const prices = services.filter((s) => s.active && s.priceMinor > 0).map((s) => s.priceMinor);
+    return prices.length > 0 ? Math.min(...prices) : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * True total for a patient query, not just the size of the page returned.
+ *
+ * The REST endpoint reports no count, so this asks FHIR for a summary count —
+ * the one place either API will state how many patients exist. The dashboard's
+ * "Patients (total)" tile read as the page size before this, which quietly
+ * capped the clinic's roster at whatever limit the caller happened to pass.
+ *
+ * If the count is unavailable, fall back to a lower bound derived from the page
+ * rather than failing the read: an understated total degrades one stat, while a
+ * throw takes out the whole page.
+ */
+async function countPatients(
+  q: PatientQuery,
+  pageSize: number,
+  offset: number,
+  limit: number,
+): Promise<number> {
+  try {
+    const bundle = await fhirJson<any>('/Patient', {
+      query: { _summary: 'count', ...(q.query ? { name: q.query } : {}) },
+    });
+    if (typeof bundle?.total === 'number') return bundle.total;
+  } catch {
+    /* fall through to the lower bound */
+  }
+  // A full page means there is probably more; anything short is the real end.
+  return offset + pageSize + (pageSize === limit ? 1 : 0);
+}
+
+// ----------------------------------------------------------------------------
+// Vital signs (FHIR Observation)
+// ----------------------------------------------------------------------------
+
+/**
+ * LOINC codes for the vitals the chart displays. Matching on code rather than
+ * display text is what makes this survive a different EMR locale or wording.
+ */
+const LOINC = {
+  bloodPressure: '85354-9',
+  systolic: '8480-6',
+  diastolic: '8462-4',
+  pulse: '8867-4',
+  bodyTemperature: '8310-5',
+  bodyHeight: '8302-2',
+  bodyWeight: '29463-7',
+} as const;
+
+type VitalsRow = MedicalHistory['vitals'][number];
+
+/**
+ * Collapse FHIR vital-sign Observations into one row per reading time.
+ *
+ * FHIR records each vital as its own Observation, except blood pressure, which
+ * is a panel carrying systolic and diastolic as components. The chart wants a
+ * row per visit, so observations sharing an effective time are merged — that's
+ * what makes "118/76, pulse 72" read as one set of vitals rather than three
+ * unrelated numbers.
+ */
+function toVitals(entries: any[]): VitalsRow[] {
+  const byTime = new Map<string, VitalsRow>();
+
+  for (const entry of entries) {
+    const resource = entry?.resource;
+    if (!resource) continue;
+    const date: string = resource.effectiveDateTime ?? resource.effectivePeriod?.start ?? '';
+    if (!date) continue;
+
+    const row = byTime.get(date) ?? { date };
+    byTime.set(date, row);
+
+    // Blood pressure arrives as a panel; its parts are in `component`.
+    for (const component of resource.component ?? []) {
+      const code = codeOf(component);
+      if (code === LOINC.systolic) row.systolic = valueOf(component);
+      else if (code === LOINC.diastolic) row.diastolic = valueOf(component);
+    }
+
+    switch (codeOf(resource)) {
+      case LOINC.systolic:
+        row.systolic = valueOf(resource);
+        break;
+      case LOINC.diastolic:
+        row.diastolic = valueOf(resource);
+        break;
+      case LOINC.pulse:
+        row.pulse = valueOf(resource);
+        break;
+      case LOINC.bodyTemperature:
+        row.temperatureC = toCelsius(valueOf(resource), resource.valueQuantity?.unit);
+        break;
+      case LOINC.bodyHeight:
+        row.heightCm = toCentimetres(valueOf(resource), resource.valueQuantity?.unit);
+        break;
+      case LOINC.bodyWeight:
+        row.weightKg = toKilograms(valueOf(resource), resource.valueQuantity?.unit);
+        break;
+      case LOINC.bloodPressure:
+        break; // handled via components above
+    }
+  }
+
+  // Newest first, and capped after merging — slicing the raw entries would have
+  // truncated a panel mid-way and produced a half-populated reading.
+  return Array.from(byTime.values())
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 20);
+}
+
+function codeOf(node: any): string | undefined {
+  return (node?.code?.coding ?? []).find((c: any) => c?.code)?.code;
+}
+
+function valueOf(node: any): number | undefined {
+  const value = node?.valueQuantity?.value;
+  return typeof value === 'number' ? value : undefined;
+}
+
+/** OpenEMR may report imperial units depending on how the instance is set up. */
+function toCelsius(value: number | undefined, unit?: string): number | undefined {
+  if (value === undefined) return undefined;
+  return /f/i.test(unit ?? '') ? Math.round(((value - 32) * 5) / 9 * 10) / 10 : value;
+}
+
+function toCentimetres(value: number | undefined, unit?: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (/in/i.test(unit ?? '')) return Math.round(value * 2.54 * 10) / 10;
+  return value;
+}
+
+function toKilograms(value: number | undefined, unit?: string): number | undefined {
+  if (value === undefined) return undefined;
+  if (/lb/i.test(unit ?? '')) return Math.round(value * 0.45359237 * 10) / 10;
+  return value;
 }
 
 function extractArray<T>(raw: any): T[] {
