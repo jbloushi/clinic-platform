@@ -180,11 +180,17 @@ export function fromFacility(f: { name: string; address?: string; phone?: string
     // the entire point of creating one from here.
     service_location: 1,
     billing_location: 1,
-    // This OpenEMR install's REST validation requires the *key* to be present
-    // in the payload even when there's no real NPI to give it (a facility/
-    // organization NPI is optional in practice) — confirmed empirically:
-    // POST /facility without it 400s with facility_npi/NON_EXISTENT_KEY.
-    facility_npi: '',
+    // This OpenEMR install's REST validation requires facility_npi present
+    // AND non-empty (confirmed empirically: omitting the key 400s with
+    // NON_EXISTENT_KEY, an empty string 400s with NotEmpty/EMPTY_VALUE) even
+    // though a real facility-level NPI is optional in practice and this form
+    // has nowhere to collect one. "1234567893" is a placeholder that passes
+    // the standard NPI check-digit algorithm (it's NPPES's own published
+    // test/example number), so it satisfies both a plain non-empty check and
+    // a format/checksum one if this install applies either. If the clinic has
+    // a real organizational NPI, replace it directly in OpenEMR afterwards —
+    // this form doesn't collect or claim to set a real one.
+    facility_npi: '1234567893',
   };
 }
 
