@@ -192,18 +192,26 @@ async function reset(conn: Connection) {
 type DoctorRow = { id: number; uuid: string; fname: string; lname: string; specialty: string; facilityId: number };
 type PatientRow = { pid: number; uuid: string; fname: string; lname: string; mobile: string; hasIdentity: boolean };
 
-async function seedDoctors(conn: Connection): Promise<DoctorRow[]> {
-  console.log('· doctors…');
-  const rows: DoctorRow[] = [];
-  // Facility → platform Branch, so seeded availability can be scoped to the
-  // right branch when one is already linked (ops → Branches → Link facility).
-  // Unlinked/unknown facilities fall back to branchId: null (applies
-  // everywhere), matching the table's existing fallback semantics.
+/**
+ * Facility → platform Branch, so seeded availability and offerings can be
+ * scoped to the right branch when one is already linked (ops → Branches →
+ * Link facility). Unlinked/unknown facilities map to nothing — availability
+ * falls back to branchId: null (applies everywhere); offerings for that
+ * doctor are skipped entirely, since an offering without a real branch isn't
+ * a thing the model allows.
+ */
+async function resolveBranchByFacility(): Promise<Map<number, string>> {
   const branchByFacilityId = new Map<number, string>();
   for (const facilityId of FACILITY_IDS) {
     const branch = await prisma.branch.findFirst({ where: { openemrFacilityId: facilityId } });
     if (branch) branchByFacilityId.set(facilityId, branch.id);
   }
+  return branchByFacilityId;
+}
+
+async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, string>): Promise<DoctorRow[]> {
+  console.log('· doctors…');
+  const rows: DoctorRow[] = [];
 
   for (let i = 0; i < DOCTORS.length; i++) {
     const d = DOCTORS[i];
@@ -498,6 +506,86 @@ async function seedServiceSpecialists(doctors: DoctorRow[]) {
   }
 }
 
+/**
+ * Real `PractitionerOffering` rows for the offering-model engine (the old
+ * `ServiceSpecialist` rows above are for the pre-offering booking flow, kept
+ * separately since both models still coexist).
+ *
+ * A doctor only gets an offering when their free-text OpenEMR specialty
+ * genuinely maps to one of this clinic's real departments — via the same
+ * `DepartmentSpecialty` table `/ops/departments` and the earlier reference
+ * backfill use, not a fresh guess. "Cardiology" and "Pediatrics" among the
+ * demo roster have no such mapping (this clinic doesn't have those
+ * departments) and are reported as skipped rather than forced into an
+ * unrelated one. A doctor whose facility isn't yet linked to a platform
+ * Branch is skipped for the same reason — an offering without a real branch
+ * isn't a thing the model allows.
+ *
+ * Also creates the `PractitionerBranch` row each offering depends on
+ * (offering-repo.ts refuses to create an offering for a doctor who isn't
+ * assigned to the branch) — seedDoctors() only ever wrote the doctor into
+ * OpenEMR's facility field, never the platform's own assignment table.
+ */
+async function seedOfferings(doctors: DoctorRow[], branchByFacilityId: Map<number, string>) {
+  console.log('· practitioner offerings…');
+  const { createPractitionerOffering, OfferingParentError } = await import('../src/lib/data/offering-repo');
+  const { normalizeSpecialty } = await import('../src/lib/data/specialty');
+
+  let created = 0;
+  const skipped: string[] = [];
+
+  for (const doctor of doctors) {
+    const branchId = branchByFacilityId.get(doctor.facilityId);
+    if (!branchId) {
+      skipped.push(`${doctor.fname} ${doctor.lname} (${doctor.specialty}): facility ${doctor.facilityId} isn't linked to a platform branch yet`);
+      continue;
+    }
+
+    const specialtyMapping = await prisma.departmentSpecialty.findFirst({
+      where: { specialtyKey: normalizeSpecialty(doctor.specialty) },
+    });
+    if (!specialtyMapping) {
+      skipped.push(`${doctor.fname} ${doctor.lname}: "${doctor.specialty}" has no matching department at this clinic`);
+      continue;
+    }
+
+    await prisma.practitionerBranch.upsert({
+      where: { specialistOpenemrUuid_branchId: { specialistOpenemrUuid: doctor.uuid, branchId } },
+      create: { specialistOpenemrUuid: doctor.uuid, branchId, active: true },
+      update: { active: true },
+    });
+
+    const serviceLinks = await prisma.serviceDepartment.findMany({
+      where: { departmentId: specialtyMapping.departmentId, active: true },
+    });
+    for (const link of serviceLinks) {
+      try {
+        await createPractitionerOffering({
+          specialistOpenemrUuid: doctor.uuid,
+          serviceId: link.serviceId,
+          departmentId: specialtyMapping.departmentId,
+          branchId,
+          allowAutoAssignment: true,
+          allowPatientChoice: true,
+        });
+        created += 1;
+      } catch (e) {
+        if (e instanceof OfferingParentError) {
+          skipped.push(`${doctor.fname} ${doctor.lname} / service ${link.serviceId}: ${e.missing.join(', ')}`);
+        } else if ((e as any)?.code !== 'P2002') {
+          throw e;
+        }
+      }
+    }
+  }
+
+  console.log(`  offerings created: ${created}`);
+  if (skipped.length > 0) {
+    console.log('  skipped:');
+    for (const line of skipped) console.log(`    · ${line}`);
+  }
+}
+
 async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
   console.log('· platform wallet / bookings / payments…');
   const services = await prisma.service.findMany({ where: { active: true } });
@@ -589,11 +677,13 @@ async function main() {
   await conn.query("SET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION'");
   console.log('Seeding demo clinic…');
   await reset(conn);
-  const doctors = await seedDoctors(conn);
+  const branchByFacilityId = await resolveBranchByFacility();
+  const doctors = await seedDoctors(conn, branchByFacilityId);
   const patients = await seedPatients(conn);
   await seedClinical(conn, patients, doctors);
   const appts = await seedAppointments(conn, patients, doctors);
   await seedServiceSpecialists(doctors);
+  await seedOfferings(doctors, branchByFacilityId);
   await seedPlatform(patients, doctors);
   await conn.end();
 
