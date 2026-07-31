@@ -222,18 +222,23 @@ export function AppShell({
                   </p>
                 )}
               </div>
-              <Link
-                href={variant === 'patient' ? '/api/auth/patient/logout' : '/api/auth/staff/logout'}
-                className={cn(
-                  'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                  onBrand
-                    ? 'text-surface-soft/70 hover:bg-white/10 hover:text-surface-soft'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-                )}
-                aria-label="Sign out"
-              >
-                <LogOut className="h-4 w-4" />
-              </Link>
+              {/* A `<form method="POST">`, not a `<Link>` — logout is a
+                  side-effecting action, and Next.js prefetches any `<Link>`
+                  that scrolls into view, which would fire it with no click. */}
+              <form action={variant === 'patient' ? '/api/auth/patient/logout' : '/api/auth/staff/logout'} method="POST">
+                <button
+                  type="submit"
+                  className={cn(
+                    'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+                    onBrand
+                      ? 'text-surface-soft/70 hover:bg-white/10 hover:text-surface-soft'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                  )}
+                  aria-label="Sign out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </form>
             </div>
           </div>
         )}

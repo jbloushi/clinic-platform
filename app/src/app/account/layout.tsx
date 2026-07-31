@@ -34,13 +34,19 @@ export default async function AccountLayout({ children }: { children: React.Reac
               <span className="hidden max-w-[120px] truncate text-xs text-muted-foreground sm:inline">
                 {name}
               </span>
-              <Link
-                href="/api/auth/patient/logout"
-                aria-label="Sign out"
-                className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
-              >
-                <LogOut className="h-4 w-4" />
-              </Link>
+              {/* `<form method="POST">`, not a `<Link>` — this sign-out button
+                  sits in a `sticky top-0` header, so it's in the viewport on
+                  every account page; Next.js's <Link> prefetch would have
+                  silently fired the logout request with no click at all. */}
+              <form action="/api/auth/patient/logout" method="POST">
+                <button
+                  type="submit"
+                  aria-label="Sign out"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <LogOut className="h-4 w-4" />
+                </button>
+              </form>
             </div>
           </div>
         </div>
