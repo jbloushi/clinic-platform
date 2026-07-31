@@ -154,6 +154,7 @@ export interface OpenEMRFacilityDto {
   service_location?: string | number;
   billing_location?: string | number;
   inactive?: string | number;
+  facility_npi?: string;
 }
 
 export function toFacility(dto: OpenEMRFacilityDto): Facility {
@@ -179,6 +180,11 @@ export function fromFacility(f: { name: string; address?: string; phone?: string
     // the entire point of creating one from here.
     service_location: 1,
     billing_location: 1,
+    // This OpenEMR install's REST validation requires the *key* to be present
+    // in the payload even when there's no real NPI to give it (a facility/
+    // organization NPI is optional in practice) — confirmed empirically:
+    // POST /facility without it 400s with facility_npi/NON_EXISTENT_KEY.
+    facility_npi: '',
   };
 }
 
