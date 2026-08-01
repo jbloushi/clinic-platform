@@ -100,15 +100,25 @@ function daysFromNow(n: number): Date {
 // ----------------------------------------------------------------------------
 // Reference data
 // ----------------------------------------------------------------------------
+/**
+ * The clinic's real doctors and specialties, as published on
+ * draljarallah.com — not a synthetic roster. `specialty` is chosen to match
+ * an existing `DepartmentSpecialty` key exactly (see the mapping printed by
+ * `/ops/departments`), so every one of these maps to a real department;
+ * unlike the old placeholder roster, nothing here should land in `skipped`.
+ * All appointments, patients, and clinical notes attached to them by this
+ * script remain entirely synthetic — only the identity/specialty is real.
+ */
 const DOCTORS = [
-  { fname: 'Amina', lname: 'Haddad', specialty: 'Internal Medicine', taxonomy: '207R00000X', bio: 'Consultant internist focusing on preventive care and chronic disease management.' },
-  { fname: 'Yusuf', lname: 'Rahman', specialty: 'Cardiology', taxonomy: '207RC0000X', bio: 'Cardiologist covering hypertension, arrhythmia workup and cardiac risk assessment.' },
-  { fname: 'Sara', lname: 'Khalil', specialty: 'Pediatrics', taxonomy: '208000000X', bio: 'Pediatrician covering well-child visits, immunizations and common childhood illness.' },
-  { fname: 'Omar', lname: 'Farouk', specialty: 'Dermatology', taxonomy: '207N00000X', bio: 'Dermatologist treating skin, hair and nail conditions for all ages.' },
-  { fname: 'Layla', lname: 'Mansour', specialty: 'Orthopedics', taxonomy: '207X00000X', bio: 'Orthopedic surgeon focused on joints, sports injuries and fracture care.' },
-  { fname: 'Khalid', lname: 'Nasser', specialty: 'ENT', taxonomy: '207Y00000X', bio: 'Otolaryngologist managing ear, nose and throat conditions.' },
-  { fname: 'Nadia', lname: 'Aziz', specialty: 'Family Medicine', taxonomy: '207Q00000X', bio: 'Family physician providing whole-family primary care.' },
-  { fname: 'Tariq', lname: 'Saleh', specialty: 'Cardiology', taxonomy: '207RC0000X', bio: 'Interventional cardiologist with a focus on preventive heart health.' },
+  { title: 'Dr.', fname: 'Mohammad Ahmad', lname: 'Al-Jarallah', specialty: 'Obesity & Bariatric Surgery', taxonomy: '2086S0122X', bio: 'Consultant obesity and tumor surgeon.' },
+  { title: 'Dr.', fname: 'Mohammad', lname: 'Ibrahim', specialty: 'General Surgery', taxonomy: '208600000X', bio: 'General surgery consultant with a focus on obesity procedures.' },
+  { title: 'Dr.', fname: 'Ali', lname: 'Al-Baqshi', specialty: 'General Surgery', taxonomy: '208600000X', bio: 'General surgery consultant.' },
+  { title: 'Dr.', fname: 'Fawaz', lname: 'Abu Al-Hassan', specialty: 'Gastroenterology', taxonomy: '207RG0100X', bio: 'General and GI surgery specialist.' },
+  { title: 'Dr.', fname: 'Amr', lname: 'Al-Zaki', specialty: 'Gastroenterology', taxonomy: '207RG0100X', bio: 'Surgery, endoscopy and obesity specialist.' },
+  { title: 'Dr.', fname: 'Mohammad Abdul-Reda', lname: 'Al-Zanki', specialty: 'Gastroenterology', taxonomy: '207RG0100X', bio: 'Consultant in general, endoscopic and endocrine surgery.' },
+  { title: 'Dr.', fname: 'Mohammad Jamal', lname: 'El-Labban', specialty: 'Plastic & Reconstructive Surgery', taxonomy: '208200000X', bio: 'Consultant plastic and reconstructive surgeon.' },
+  { title: 'Dietitian', fname: 'Mohammad', lname: 'Al-Hayek', specialty: 'Clinical Nutrition', taxonomy: '133V00000X', bio: 'Nutrition specialist.' },
+  { title: 'Dr.', fname: 'Khulood', lname: 'Al-Dhafiri', specialty: 'Clinical Nutrition', taxonomy: '133V00000X', bio: 'Registered physician, clinical nutrition.' },
 ];
 
 const FIRST_NAMES = ['James', 'Mary', 'Ahmed', 'Fatima', 'John', 'Aisha', 'Robert', 'Noor', 'David', 'Layla', 'Michael', 'Sara', 'William', 'Huda', 'Richard', 'Mariam', 'Joseph', 'Zainab', 'Thomas', 'Leila', 'Daniel', 'Rania', 'Matthew', 'Salma'];
@@ -218,6 +228,36 @@ async function resolveBranchByFacility(): Promise<Map<number, string>> {
   return branchByFacilityId;
 }
 
+/**
+ * Every `Service` a real department (`Service.departmentId`, set via ops →
+ * Services) is a candidate offering — but `PractitionerOffering` creation
+ * validates against two SEPARATE link tables, `ServiceDepartment` and
+ * `ServiceBranch`, neither of which the ops UI or any backfill script
+ * populates from that direct FK today. Skipping this step doesn't fail
+ * loudly — `seedOfferings` just silently creates zero offerings, which is
+ * exactly what happened in production before this was added here. Runs
+ * before `seedOfferings` so a fresh reseed is self-sufficient instead of
+ * needing this patched in by hand every time.
+ */
+async function seedServiceLinks(branchByFacilityId: Map<number, string>) {
+  console.log('· service <-> department/branch links…');
+  const { setServiceDepartments } = await import('../src/lib/data/offering-repo');
+  const services = await prisma.service.findMany({ where: { departmentId: { not: null } } });
+  const branchIds = [...branchByFacilityId.values()];
+
+  for (const svc of services) {
+    await setServiceDepartments(svc.id, [{ departmentId: svc.departmentId!, isPrimary: true, active: true }]);
+    for (const branchId of branchIds) {
+      await prisma.serviceBranch.upsert({
+        where: { serviceId_branchId: { serviceId: svc.id, branchId } },
+        create: { serviceId: svc.id, branchId, active: true, publishedOnWeb: true },
+        update: { active: true, publishedOnWeb: true },
+      });
+    }
+  }
+  console.log(`  linked ${services.length} service(s) to their department across ${branchIds.length} branch(es)`);
+}
+
 async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, string>): Promise<DoctorRow[]> {
   console.log('· doctors…');
   const { normalizeSpecialty } = await import('../src/lib/data/specialty');
@@ -228,15 +268,16 @@ async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, str
     const d = DOCTORS[i];
     const facilityId = FACILITY_IDS[i % FACILITY_IDS.length];
     const hex = uuidHex();
-    const username = `doc_${d.fname.toLowerCase()}_${d.lname.toLowerCase()}`;
+    const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    const username = `doc_${slug(d.fname)}_${slug(d.lname)}`;
     const npi = String(9_000_000_000 + Math.floor(rnd() * 999_999_999)).slice(0, 10);
     const [res] = (await conn.query(
       `INSERT INTO users (uuid, username, fname, lname, authorized, active, federaltaxid, federaldrugid, upin,
         facility, facility_id, npi, title, specialty, taxonomy, calendar, cal_ui, see_auth,
         physician_type, main_menu_role, patient_menu_role, date_created, info)
-       VALUES (UNHEX(?), ?, ?, ?, 1, 1, '', '', '', 'Your Clinic Name Here', ?, ?, 'Dr.', ?, ?, 1, 3, 1,
+       VALUES (UNHEX(?), ?, ?, ?, 1, 1, '', '', '', 'Your Clinic Name Here', ?, ?, ?, ?, ?, 1, 3, 1,
         'doctor', 'standard', 'standard', NOW(), ?)`,
-      [hex, username, d.fname, d.lname, facilityId, npi, d.specialty, d.taxonomy, d.bio],
+      [hex, username, d.fname, d.lname, facilityId, npi, d.title, d.specialty, d.taxonomy, d.bio],
     )) as any;
     await registerUuid(conn, hex, 'users');
     const id = res.insertId as number;
@@ -286,10 +327,11 @@ async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, str
     rows.push({ id, uuid, fname: d.fname, lname: d.lname, specialty: d.specialty, facilityId, secondaryBranchIds });
   }
 
-  // Link the demo doctor staff account to the first cardiologist
-  const cardio = rows.find((r) => r.specialty === 'Cardiology');
-  if (cardio) {
-    await prisma.staffUser.updateMany({ where: { email: 'doctor@clinic.local' }, data: { openemrUserId: cardio.uuid } });
+  // Link the demo doctor staff account to the clinic's lead consultant, so
+  // logging in as doctor@clinic.local lands on a doctor with real bookings.
+  const lead = rows[0];
+  if (lead) {
+    await prisma.staffUser.updateMany({ where: { email: 'doctor@clinic.local' }, data: { openemrUserId: lead.uuid } });
   }
   return rows;
 }
@@ -526,8 +568,8 @@ async function seedServiceSpecialists(doctors: DoctorRow[]) {
   const bySpecialty = (specialty: string) => doctors.filter((d) => d.specialty === specialty).map((d) => d.uuid);
 
   const rules: Record<string, string[]> = {
-    'Extended consultation': bySpecialty('Internal Medicine'),
-    'Procedure (in-clinic)': bySpecialty('Dermatology'),
+    'Extended consultation': bySpecialty('General Surgery'),
+    'Procedure (in-clinic)': bySpecialty('Plastic & Reconstructive Surgery'),
   };
 
   for (const svc of services) {
@@ -562,12 +604,12 @@ const SECONDARY_BRANCH_AVAILABILITY = [
  * A doctor only gets an offering when their free-text OpenEMR specialty
  * genuinely maps to one of this clinic's real departments — via the same
  * `DepartmentSpecialty` table `/ops/departments` and the earlier reference
- * backfill use, not a fresh guess. "Cardiology" and "Pediatrics" among the
- * demo roster have no such mapping (this clinic doesn't have those
- * departments) and are reported as skipped rather than forced into an
- * unrelated one. A doctor whose facility isn't yet linked to a platform
- * Branch is skipped for the same reason — an offering without a real branch
- * isn't a thing the model allows.
+ * backfill use, not a fresh guess. The `DOCTORS` roster is drawn from the
+ * clinic's real published specialties, so this should map cleanly for all of
+ * them; a specialty with no mapping is reported as skipped rather than
+ * forced into an unrelated department. A doctor whose facility isn't yet
+ * linked to a platform Branch is skipped for the same reason — an offering
+ * without a real branch isn't a thing the model allows.
  *
  * Also creates the `PractitionerBranch` row each offering depends on
  * (offering-repo.ts refuses to create an offering for a doctor who isn't
@@ -760,6 +802,7 @@ async function main() {
   console.log('Seeding demo clinic…');
   await reset(conn);
   const branchByFacilityId = await resolveBranchByFacility();
+  await seedServiceLinks(branchByFacilityId);
   const doctors = await seedDoctors(conn, branchByFacilityId);
   const patients = await seedPatients(conn);
   await seedClinical(conn, patients, doctors);
