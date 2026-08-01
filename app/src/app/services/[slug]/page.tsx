@@ -63,7 +63,7 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
         </dl>
 
         <Button asChild size="lg" className="mt-8 rounded-control">
-          <Link href={`/book?service=${service.slug}`}>Book this service</Link>
+          <Link href={`/book/v2?service=${service.slug}`}>Book this service</Link>
         </Button>
         <p className="mt-4 text-sm text-muted-foreground">
           Preparation instructions, if required, will be shown with your appointment confirmation.

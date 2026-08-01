@@ -189,7 +189,16 @@ async function reset(conn: Connection) {
 // ----------------------------------------------------------------------------
 // Seed
 // ----------------------------------------------------------------------------
-type DoctorRow = { id: number; uuid: string; fname: string; lname: string; specialty: string; facilityId: number };
+type DoctorRow = {
+  id: number;
+  uuid: string;
+  fname: string;
+  lname: string;
+  specialty: string;
+  facilityId: number;
+  /** Other branches (besides their home one) this doctor also has availability + will get offerings at — the travel-buffer demo doctors. */
+  secondaryBranchIds: string[];
+};
 type PatientRow = { pid: number; uuid: string; fname: string; lname: string; mobile: string; hasIdentity: boolean };
 
 /**
@@ -211,7 +220,9 @@ async function resolveBranchByFacility(): Promise<Map<number, string>> {
 
 async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, string>): Promise<DoctorRow[]> {
   console.log('· doctors…');
+  const { normalizeSpecialty } = await import('../src/lib/data/specialty');
   const rows: DoctorRow[] = [];
+  let multiBranchAssigned = 0;
 
   for (let i = 0; i < DOCTORS.length; i++) {
     const d = DOCTORS[i];
@@ -230,7 +241,6 @@ async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, str
     await registerUuid(conn, hex, 'users');
     const id = res.insertId as number;
     const uuid = formatUuid(hex);
-    rows.push({ id, uuid, fname: d.fname, lname: d.lname, specialty: d.specialty, facilityId });
 
     // Availability rules — written straight to the real AvailabilityRule
     // table (availability-repo.ts), not the legacy AuditLog blob: nothing
@@ -247,10 +257,33 @@ async function seedDoctors(conn: Connection, branchByFacilityId: Map<number, str
     ];
     const rules = patterns[i % patterns.length];
     const branchId = branchByFacilityId.get(facilityId) ?? null;
-    await upsertAvailabilityRules(
-      uuid,
-      rules.map((r) => ({ ...r, branchId })),
-    );
+
+    // Doctors whose specialty maps to a real department become the
+    // travel-buffer demo data: they ALSO work at every other linked branch,
+    // on different days (SECONDARY_BRANCH_AVAILABILITY), so a patient
+    // browsing "next 30 days" genuinely sees them at one branch some days
+    // and the other branch on others — and cross-branch bookings can trigger
+    // the buffer. Combined into one upsertAvailabilityRules call because it
+    // replaces a doctor's full rule set — writing home and secondary
+    // separately would have the second call erase the first.
+    const secondaryBranchIds: string[] = [];
+    let allRules = rules.map((r) => ({ ...r, branchId }));
+    if (multiBranchAssigned < MULTI_BRANCH_DOCTOR_COUNT && branchId) {
+      const mapping = await prisma.departmentSpecialty.findFirst({
+        where: { specialtyKey: normalizeSpecialty(d.specialty) },
+      });
+      const otherBranchIds = mapping ? [...branchByFacilityId.values()].filter((id) => id !== branchId) : [];
+      if (otherBranchIds.length > 0) {
+        for (const secondaryBranchId of otherBranchIds) {
+          secondaryBranchIds.push(secondaryBranchId);
+          allRules = allRules.concat(SECONDARY_BRANCH_AVAILABILITY.map((r) => ({ ...r, branchId: secondaryBranchId })));
+        }
+        multiBranchAssigned += 1;
+      }
+    }
+    await upsertAvailabilityRules(uuid, allRules);
+
+    rows.push({ id, uuid, fname: d.fname, lname: d.lname, specialty: d.specialty, facilityId, secondaryBranchIds });
   }
 
   // Link the demo doctor staff account to the first cardiologist
@@ -506,6 +539,21 @@ async function seedServiceSpecialists(doctors: DoctorRow[]) {
   }
 }
 
+/** How many doctors (in mapping order) also get set up at every OTHER branch — the demo data for the cross-branch travel buffer feature. */
+const MULTI_BRANCH_DOCTOR_COUNT = 2;
+
+/**
+ * A plausible secondary-branch schedule: a doctor's SECOND branch gets
+ * different days/times than typical home-branch patterns (see seedDoctors),
+ * so the two locations don't look like an accidental duplicate of each
+ * other, and so patients booking "this week" actually see a doctor who is
+ * genuinely at one branch some days and the other branch on others.
+ */
+const SECONDARY_BRANCH_AVAILABILITY = [
+  { dayOfWeek: 2, startTime: '15:00', endTime: '18:00', slotMinutes: 20 }, // Tue afternoon
+  { dayOfWeek: 4, startTime: '15:00', endTime: '18:00', slotMinutes: 20 }, // Thu afternoon
+];
+
 /**
  * Real `PractitionerOffering` rows for the offering-model engine (the old
  * `ServiceSpecialist` rows above are for the pre-offering booking flow, kept
@@ -525,6 +573,11 @@ async function seedServiceSpecialists(doctors: DoctorRow[]) {
  * (offering-repo.ts refuses to create an offering for a doctor who isn't
  * assigned to the branch) — seedDoctors() only ever wrote the doctor into
  * OpenEMR's facility field, never the platform's own assignment table.
+ *
+ * The first `MULTI_BRANCH_DOCTOR_COUNT` doctors that successfully map to a
+ * department are ALSO wired up at every other linked branch (availability +
+ * PractitionerBranch + offerings) — real demo data for a doctor who works at
+ * two branches, so the cross-branch travel buffer has something to show.
  */
 async function seedOfferings(doctors: DoctorRow[], branchByFacilityId: Map<number, string>) {
   console.log('· practitioner offerings…');
@@ -533,37 +586,20 @@ async function seedOfferings(doctors: DoctorRow[], branchByFacilityId: Map<numbe
 
   let created = 0;
   const skipped: string[] = [];
+  const multiBranch: string[] = [];
 
-  for (const doctor of doctors) {
-    const branchId = branchByFacilityId.get(doctor.facilityId);
-    if (!branchId) {
-      skipped.push(`${doctor.fname} ${doctor.lname} (${doctor.specialty}): facility ${doctor.facilityId} isn't linked to a platform branch yet`);
-      continue;
-    }
-
-    const specialtyMapping = await prisma.departmentSpecialty.findFirst({
-      where: { specialtyKey: normalizeSpecialty(doctor.specialty) },
-    });
-    if (!specialtyMapping) {
-      skipped.push(`${doctor.fname} ${doctor.lname}: "${doctor.specialty}" has no matching department at this clinic`);
-      continue;
-    }
-
+  async function wireBranch(doctor: DoctorRow, branchId: string, serviceLinks: { serviceId: string }[], departmentId: string) {
     await prisma.practitionerBranch.upsert({
       where: { specialistOpenemrUuid_branchId: { specialistOpenemrUuid: doctor.uuid, branchId } },
       create: { specialistOpenemrUuid: doctor.uuid, branchId, active: true },
       update: { active: true },
-    });
-
-    const serviceLinks = await prisma.serviceDepartment.findMany({
-      where: { departmentId: specialtyMapping.departmentId, active: true },
     });
     for (const link of serviceLinks) {
       try {
         await createPractitionerOffering({
           specialistOpenemrUuid: doctor.uuid,
           serviceId: link.serviceId,
-          departmentId: specialtyMapping.departmentId,
+          departmentId,
           branchId,
           allowAutoAssignment: true,
           allowPatientChoice: true,
@@ -579,14 +615,51 @@ async function seedOfferings(doctors: DoctorRow[], branchByFacilityId: Map<numbe
     }
   }
 
+  for (const doctor of doctors) {
+    const homeBranchId = branchByFacilityId.get(doctor.facilityId);
+    if (!homeBranchId) {
+      skipped.push(`${doctor.fname} ${doctor.lname} (${doctor.specialty}): facility ${doctor.facilityId} isn't linked to a platform branch yet`);
+      continue;
+    }
+
+    const specialtyMapping = await prisma.departmentSpecialty.findFirst({
+      where: { specialtyKey: normalizeSpecialty(doctor.specialty) },
+    });
+    if (!specialtyMapping) {
+      skipped.push(`${doctor.fname} ${doctor.lname}: "${doctor.specialty}" has no matching department at this clinic`);
+      continue;
+    }
+
+    const serviceLinks = await prisma.serviceDepartment.findMany({
+      where: { departmentId: specialtyMapping.departmentId, active: true },
+    });
+    await wireBranch(doctor, homeBranchId, serviceLinks, specialtyMapping.departmentId);
+
+    // seedDoctors() already decided which doctors are multi-branch and wrote
+    // their secondary-branch availability (combined into one
+    // upsertAvailabilityRules call there, since a second call here would
+    // have wiped the home-branch rules just written above). This only needs
+    // to add the PractitionerBranch + offering rows for those branches.
+    if (doctor.secondaryBranchIds.length > 0) {
+      for (const branchId of doctor.secondaryBranchIds) {
+        await wireBranch(doctor, branchId, serviceLinks, specialtyMapping.departmentId);
+      }
+      multiBranch.push(`${doctor.fname} ${doctor.lname} (${doctor.specialty}) — home + ${doctor.secondaryBranchIds.length} more branch(es)`);
+    }
+  }
+
   console.log(`  offerings created: ${created}`);
+  if (multiBranch.length > 0) {
+    console.log('  multi-branch doctors (travel buffer demo data):');
+    for (const line of multiBranch) console.log(`    · ${line}`);
+  }
   if (skipped.length > 0) {
     console.log('  skipped:');
     for (const line of skipped) console.log(`    · ${line}`);
   }
 }
 
-async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
+async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[], branchByFacilityId: Map<number, string>) {
   console.log('· platform wallet / bookings / payments…');
   const services = await prisma.service.findMany({ where: { active: true } });
   if (services.length === 0) return;
@@ -623,6 +696,14 @@ async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
     if (chance(0.6)) {
       const svc = pick(services);
       const doc = pick(doctors);
+      // Multi-branch doctors get booked at their SECONDARY branch about half
+      // the time — without this, every seeded booking would land on a
+      // doctor's home branch and the cross-branch travel buffer would never
+      // actually have two different-branch bookings to compare.
+      const bookedFacilityBranchId =
+        doc.secondaryBranchIds.length > 0 && chance(0.5)
+          ? pick(doc.secondaryBranchIds)
+          : branchByFacilityId.get(doc.facilityId);
       const when = daysFromNow(1 + Math.floor(rnd() * 12));
       when.setHours(9 + Math.floor(rnd() * 7), pick([0, 20, 40]), 0, 0);
       const end = new Date(when.getTime() + svc.durationMinutes * 60_000);
@@ -636,6 +717,7 @@ async function seedPlatform(patients: PatientRow[], doctors: DoctorRow[]) {
           status: 'confirmed',
           reason: pick(VISIT_REASONS),
           holdExpiresAt: when,
+          branchId: bookedFacilityBranchId ?? null,
         },
       });
       await prisma.payment.create({
@@ -684,7 +766,7 @@ async function main() {
   const appts = await seedAppointments(conn, patients, doctors);
   await seedServiceSpecialists(doctors);
   await seedOfferings(doctors, branchByFacilityId);
-  await seedPlatform(patients, doctors);
+  await seedPlatform(patients, doctors, branchByFacilityId);
   await conn.end();
 
   console.log('\nDone. Summary:');

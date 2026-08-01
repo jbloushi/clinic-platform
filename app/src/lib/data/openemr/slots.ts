@@ -1,6 +1,7 @@
 import type { AvailabilityRule, ISODate, ISODateTime, Slot } from '../types';
 import { restJson } from './client';
 import { toAppointment, type OpenEMRAppointmentDto } from './mappers';
+import { getCrossBranchBufferRanges } from '../travel-buffer';
 
 /**
  * Free-slot computation for a practitioner across a date range.
@@ -22,9 +23,17 @@ export async function computeAvailableSlots(
   to: ISODate,
   overrideSlotMinutes?: number,
   numericId?: string,
+  /** When given, cross-branch bookings elsewhere for this doctor are padded
+   *  by the travel buffer and excluded from this branch's slots. */
+  targetBranchId?: string,
 ): Promise<Slot[]> {
-  const booked = await fetchBookedRanges(practitionerId, from, to, numericId);
-  return generateSlotsFromBooked(practitionerId, availability, from, to, booked, overrideSlotMinutes);
+  const [booked, bufferRanges] = await Promise.all([
+    fetchBookedRanges(practitionerId, from, to, numericId),
+    targetBranchId
+      ? getCrossBranchBufferRanges(practitionerId, targetBranchId, new Date(`${from}T00:00:00`), new Date(`${to}T23:59:59`))
+      : Promise.resolve([]),
+  ]);
+  return generateSlotsFromBooked(practitionerId, availability, from, to, [...booked, ...bufferRanges], overrideSlotMinutes);
 }
 
 /**

@@ -15,6 +15,7 @@ type Settings = {
   slotSearchWindowDays: number;
   slotQuantumMinutes: number;
   showDoctorNameBeforePayment: boolean;
+  crossBranchBufferMinutes: number;
 };
 
 export function AssignmentSettingsForm({ settings }: { settings: Settings }) {
@@ -131,6 +132,28 @@ export function AssignmentSettingsForm({ settings }: { settings: Settings }) {
               max={60}
               value={form.slotQuantumMinutes}
               onChange={(e) => setForm((p) => ({ ...p, slotQuantumMinutes: Number(e.target.value) }))}
+            />
+          </Field>
+        </div>
+      </section>
+
+      <section className="space-y-3 border-t pt-5">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Cross-branch scheduling
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field
+            label="Travel buffer (minutes)"
+            htmlFor="crossBranchBufferMinutes"
+            hint="Minimum gap required between a doctor's appointments at two different branches. Never applied within the same branch. Individual doctors can override this in their profile."
+          >
+            <Input
+              id="crossBranchBufferMinutes"
+              type="number"
+              min={0}
+              max={240}
+              value={form.crossBranchBufferMinutes}
+              onChange={(e) => setForm((p) => ({ ...p, crossBranchBufferMinutes: Number(e.target.value) }))}
             />
           </Field>
         </div>

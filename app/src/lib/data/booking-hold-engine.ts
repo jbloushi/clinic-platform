@@ -11,6 +11,7 @@ import {
 import { listPractitionerOfferings, getEffectiveOfferingConfiguration } from './offering-repo';
 import { validateOffering, canSatisfySelectionMode } from './offering-resolution';
 import { getBookingCountsSince } from './platform-repo';
+import { getCrossBranchBufferRanges } from './travel-buffer';
 
 /**
  * Turns a ranked pool of doctors into a real, overlap-safe `BookingHold` row.
@@ -237,6 +238,21 @@ async function tryCreateHold(args: {
 
   const buckets = slotBuckets(input.startAt, input.endAt, settings.slotQuantumMinutes);
   if (buckets.length === 0) return null;
+
+  // Re-check the travel buffer right before writing, not just when the slot
+  // list was first shown to the patient — closes (most of) the race where a
+  // different-branch hold for the same doctor was created in between. Not a
+  // full atomic guarantee (no unique-constraint backs this, unlike
+  // activeSlotKey/PractitionerSlotLock above), but the window is now the
+  // gap between this check and the transaction below, not the gap since the
+  // patient loaded the page.
+  const conflictsBuffer = await getCrossBranchBufferRanges(
+    specialistOpenemrUuid,
+    offering.branchId,
+    input.startAt,
+    input.endAt,
+  );
+  if (conflictsBuffer.some((r) => r.start < +input.endAt && r.end > +input.startAt)) return null;
 
   const practitioner = await getDataProvider()
     .getPractitionerById(specialistOpenemrUuid)

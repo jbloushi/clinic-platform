@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { BookShell } from '@/components/domain/book-shell';
 import { getBranchBySlug } from '@/lib/data/reference-repo';
 import { listPractitionerOfferings } from '@/lib/data/offering-repo';
+import { PRIORITY_TIER_ORDER } from '@/lib/data/offering-resolution';
 import { getDataProvider } from '@/lib/data';
 import { getLocale } from '@/lib/i18n-server';
 import { getNextAvailableSlot } from '@/lib/booking/next-available';
@@ -45,12 +46,24 @@ export default async function BookV2DoctorPage({
         // only — sorts and reassures, but the real slot list (with the
         // service's actual duration) is fetched once one is picked.
         const nextAvailable = await getNextAvailableSlot(dp, uuid, selectedBranch.id, rows[0]?.service.durationMinutes);
+        // A doctor can have several offerings (one per service) at this
+        // branch, each with its own priority — use their best (lowest) one
+        // as the tiebreaker signal, same idea as auto-assignment ranking.
+        const bestOffering = rows.reduce((best, row) =>
+          PRIORITY_TIER_ORDER[row.assignmentPriorityTier] < PRIORITY_TIER_ORDER[best.assignmentPriorityTier] ||
+          (PRIORITY_TIER_ORDER[row.assignmentPriorityTier] === PRIORITY_TIER_ORDER[best.assignmentPriorityTier] &&
+            row.assignmentPriority < best.assignmentPriority)
+            ? row
+            : best,
+        );
         return {
           uuid,
           name: `${practitioner.title} ${practitioner.firstName} ${practitioner.lastName}`.trim(),
           specialty: practitioner.specialty,
           photoUrl: practitioner.photoUrl ?? null,
           nextAvailable,
+          assignmentPriorityTier: bestOffering.assignmentPriorityTier,
+          assignmentPriority: bestOffering.assignmentPriority,
           services: rows.map((row) => ({
             id: row.service.id,
             departmentId: row.departmentId,
@@ -59,19 +72,32 @@ export default async function BookV2DoctorPage({
             priceMinor: row.service.priceMinor,
             currency: row.service.currency,
           })),
-        } satisfies DoctorOpt;
+        };
       }),
     )
   ).filter((d): d is NonNullable<typeof d> => d !== null);
 
-  // Earliest available first — a doctor with nothing free in the search
-  // window sorts last rather than by name, which would bury real availability.
-  const doctors = unsorted.sort((a, b) => {
-    if (!a.nextAvailable && !b.nextAvailable) return 0;
-    if (!a.nextAvailable) return 1;
-    if (!b.nextAvailable) return -1;
-    return a.nextAvailable.start.localeCompare(b.nextAvailable.start);
-  });
+  // Earliest available first, but doctors whose next slot falls on the same
+  // calendar day are then ordered by the clinic's priority tier before exact
+  // time — a doctor with nothing free in the search window sorts last rather
+  // than by name, which would bury real availability.
+  const doctors: DoctorOpt[] = unsorted
+    .sort((a, b) => {
+      if (!a.nextAvailable && !b.nextAvailable) return 0;
+      if (!a.nextAvailable) return 1;
+      if (!b.nextAvailable) return -1;
+
+      const dayA = a.nextAvailable.start.slice(0, 10);
+      const dayB = b.nextAvailable.start.slice(0, 10);
+      if (dayA !== dayB) return dayA.localeCompare(dayB);
+
+      const tier = PRIORITY_TIER_ORDER[a.assignmentPriorityTier] - PRIORITY_TIER_ORDER[b.assignmentPriorityTier];
+      if (tier !== 0) return tier;
+      if (a.assignmentPriority !== b.assignmentPriority) return a.assignmentPriority - b.assignmentPriority;
+
+      return a.nextAvailable.start.localeCompare(b.nextAvailable.start);
+    })
+    .map(({ assignmentPriorityTier: _t, assignmentPriority: _p, ...doctor }) => doctor);
 
   return (
     <BookShell

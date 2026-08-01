@@ -8,11 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageHeader } from '@/components/domain/page-header';
 import { getDataProvider } from '@/lib/data';
 import { requireStaff } from '@/lib/auth/guards';
+import { prisma } from '@/lib/db';
 import { getServicesForSpecialist, listServices } from '@/lib/data/platform-repo';
 import { listAvailabilityRules } from '@/lib/data/availability-repo';
 import { AvailabilityEditor } from './availability-editor';
 import { EditDetailsForm } from './edit-details-form';
 import { ServicesEditor } from './services-editor';
+import { TravelBufferEditor } from './travel-buffer-editor';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +24,12 @@ export default async function ProviderPage({ params }: { params: Promise<{ id: s
   const provider = await dp.getPractitionerById(id);
   if (!provider) notFound();
 
-  const [availability, allServices, assignedServiceIds] = await Promise.all([
+  const [availability, allServices, assignedServiceIds, travelBufferOverride, assignmentSettings] = await Promise.all([
     listAvailabilityRules(id),
     listServices(),
     getServicesForSpecialist(id),
+    prisma.practitionerTravelBuffer.findUnique({ where: { specialistOpenemrUuid: id } }),
+    prisma.assignmentSettings.upsert({ where: { id: 'singleton' }, create: {}, update: {} }),
   ]);
 
   async function toggleActive() {
@@ -85,6 +89,19 @@ export default async function ProviderPage({ params }: { params: Promise<{ id: s
             practitionerId={id}
             allServices={allServices.map((s) => ({ id: s.id, name: s.name }))}
             selectedIds={assignedServiceIds}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cross-branch travel buffer</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TravelBufferEditor
+            providerId={id}
+            clinicDefault={assignmentSettings.crossBranchBufferMinutes}
+            initialOverride={travelBufferOverride?.bufferMinutes ?? null}
           />
         </CardContent>
       </Card>

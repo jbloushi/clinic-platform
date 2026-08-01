@@ -22,7 +22,7 @@ const ITEMS: NavItem[] = [
 ];
 
 /** Central elevated gold action, rendered between items 2 and 3. */
-const BOOK = { href: '/book', label: 'Book an appointment' };
+const BOOK = { href: '/book/v2', label: 'Book an appointment' };
 
 function isActive(pathname: string, href: string): boolean {
   if (href === '/') return pathname === '/';

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, Check, Stethoscope, Users } from 'lucide-react';
+import { Building2, Check, Layers, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type BranchChoice = { slug: string; name: string; area: string };
@@ -13,14 +13,30 @@ export type BranchChoice = { slug: string; name: string; area: string };
  * same hold-creation API — this component only decides which one the patient
  * starts from.
  */
-export function V2Entry({ branches, initialBranch }: { branches: BranchChoice[]; initialBranch?: string }) {
+export function V2Entry({
+  branches,
+  initialBranch,
+  initialDepartment,
+  initialService,
+}: {
+  branches: BranchChoice[];
+  initialBranch?: string;
+  /** Carried through to the department path once a branch is picked — arriving from a department or service page. */
+  initialDepartment?: string;
+  initialService?: string;
+}) {
   const router = useRouter();
   const [branch, setBranch] = useState(initialBranch ?? '');
   const locked = !branch;
 
-  function go(path: 'service' | 'doctor') {
+  function go(path: 'department' | 'doctor') {
     if (locked) return;
-    router.push(`/book/v2/${path}?branch=${encodeURIComponent(branch)}`);
+    const params = new URLSearchParams({ branch });
+    if (path === 'department') {
+      if (initialDepartment) params.set('department', initialDepartment);
+      if (initialService) params.set('service', initialService);
+    }
+    router.push(`/book/v2/${path}?${params}`);
   }
 
   return (
@@ -73,16 +89,16 @@ export function V2Entry({ branches, initialBranch }: { branches: BranchChoice[];
           <button
             type="button"
             disabled={locked}
-            onClick={() => go('service')}
+            onClick={() => go('department')}
             className={cn(
               'min-h-[152px] rounded-card border bg-surface p-5 text-start',
               locked ? 'cursor-not-allowed' : 'card-hover press-scale',
             )}
           >
-            <Stethoscope className="h-6 w-6 text-primary" aria-hidden />
-            <span className="mt-5 block text-[14.5px] font-semibold">Find by service</span>
+            <Layers className="h-6 w-6 text-primary" aria-hidden />
+            <span className="mt-5 block text-[14.5px] font-semibold">Find by department</span>
             <span className="mt-2 block text-[12.5px] leading-relaxed text-muted-foreground">
-              Choose what you need. We&apos;ll find the earliest available doctor for it.
+              Choose a department and service, pick when you&apos;d like to be seen, then a doctor.
             </span>
           </button>
           <button

@@ -466,7 +466,21 @@ model AssignmentSettings {
   /// Whether the auto-assigned doctor's name is revealed before payment.
   showDoctorNameBeforePayment Boolean @default(true)
 
+  /// Default minimum gap required between a doctor's appointments at two
+  /// DIFFERENT branches (never applied within the same branch). Overridable
+  /// per doctor via PractitionerTravelBuffer.
+  crossBranchBufferMinutes Int @default(45)
+
   updatedAt DateTime @updatedAt
+}
+
+/// Per-doctor override of AssignmentSettings.crossBranchBufferMinutes. A
+/// missing row means "use the clinic default" — this is an exceptions table,
+/// not a mirror of every doctor.
+model PractitionerTravelBuffer {
+  specialistOpenemrUuid String @id
+  bufferMinutes         Int
+  updatedAt             DateTime @updatedAt
 }
 
 /// Overlap-safe reservation of a doctor's time.

@@ -40,6 +40,7 @@ export default async function AssignmentSettingsPage() {
               slotSearchWindowDays: settings.slotSearchWindowDays,
               slotQuantumMinutes: settings.slotQuantumMinutes,
               showDoctorNameBeforePayment: settings.showDoctorNameBeforePayment,
+              crossBranchBufferMinutes: settings.crossBranchBufferMinutes,
             }}
           />
         </CardContent>

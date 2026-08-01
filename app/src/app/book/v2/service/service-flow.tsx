@@ -9,7 +9,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import type { Slot } from '@/lib/data/types';
 import { DoctorRecommendationStep } from './doctor-recommendation';
 
-type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string };
+export type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string };
 
 /**
  * Service-path booking: pick a service, then a doctor (recommended first,
@@ -91,7 +91,13 @@ function ServicePicker({ services, onSelect }: { services: ServiceOpt[]; onSelec
   );
 }
 
-function SlotPicker({
+/**
+ * Blind aggregated slot grid — no named doctor, auto-assigned at reserve
+ * time. Exported so the department flow's date-range step can reuse it as
+ * the fallback when a service has no offering that allows a patient to pick
+ * a doctor by name.
+ */
+export function SlotPicker({
   service,
   branchSlug,
   branchId,

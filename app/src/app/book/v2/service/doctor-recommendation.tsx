@@ -6,7 +6,7 @@ import { ChevronLeft, Sparkles } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { DoctorAvatar } from '@/components/domain/avatar';
 import { EmptyState, LoadingState } from '@/components/domain/states';
-import { formatCurrency, formatTime } from '@/lib/utils';
+import { cn, formatCurrency, formatTime } from '@/lib/utils';
 import { PractitionerSlotPicker } from '../practitioner-slot-picker';
 
 export type DoctorForService = {
@@ -18,6 +18,8 @@ export type DoctorForService = {
   durationMinutes: number;
   priceMinor: number;
   nextSlot: { start: string; end: string } | null;
+  /** Slot count per calendar day across the searched range — powers the availability strip. */
+  availableDays: { date: string; count: number }[];
 };
 
 type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string };
@@ -34,12 +36,15 @@ export function DoctorRecommendationStep({
   service,
   branchSlug,
   branchId,
+  range,
   onBackToBlind,
   onChangeService,
 }: {
   service: ServiceOpt;
   branchSlug: string;
   branchId: string;
+  /** Restrict the doctor list to a patient-chosen date range (department flow) instead of the standard 14-day preview window. */
+  range?: { from: string; to: string };
   /** Renders the plain aggregated/blind flow instead — used when no offering here is patient-selectable at all. */
   onBackToBlind: () => void;
   onChangeService: () => void;
@@ -50,12 +55,17 @@ export function DoctorRecommendationStep({
   const [reserveError, setReserveError] = useState<string | null>(null);
   const [reserving, setReserving] = useState<string | null>(null);
   const [browsingDoctor, setBrowsingDoctor] = useState<DoctorForService | null>(null);
+  const [browseDate, setBrowseDate] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
     setDoctors(null);
     setError(null);
     const query = new URLSearchParams({ serviceId: service.id, branchId });
+    if (range) {
+      query.set('from', range.from);
+      query.set('to', range.to);
+    }
     fetch(`/api/availability/doctors-for-service?${query}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('failed'))))
       .then((data) => {
@@ -67,7 +77,7 @@ export function DoctorRecommendationStep({
     return () => {
       cancelled = true;
     };
-  }, [service.id, branchId]);
+  }, [service.id, branchId, range?.from, range?.to]);
 
   // No offering here allows a named pick — fall back to the blind,
   // auto-assign-only flow rather than showing an empty screen. Deferred to an
@@ -91,10 +101,19 @@ export function DoctorRecommendationStep({
         branchId={branchId}
         branchSlug={branchSlug}
         bookingEntryPath="SERVICE_PATH"
-        onBack={() => setBrowsingDoctor(null)}
+        onBack={() => {
+          setBrowsingDoctor(null);
+          setBrowseDate(undefined);
+        }}
         backLabel="Back to doctors"
+        initialDate={browseDate}
       />
     );
+  }
+
+  function browse(doctor: DoctorForService, date?: string) {
+    setBrowseDate(date);
+    setBrowsingDoctor(doctor);
   }
 
   async function bookRecommended(doctor: DoctorForService) {
@@ -167,7 +186,7 @@ export function DoctorRecommendationStep({
           highlight
           reserving={reserving === recommended.uuid}
           onBook={() => bookRecommended(recommended)}
-          onBrowse={() => setBrowsingDoctor(recommended)}
+          onBrowse={(date) => browse(recommended, date)}
         />
       </section>
 
@@ -184,7 +203,7 @@ export function DoctorRecommendationStep({
                 service={service}
                 reserving={reserving === doctor.uuid}
                 onBook={() => bookRecommended(doctor)}
-                onBrowse={() => setBrowsingDoctor(doctor)}
+                onBrowse={(date) => browse(doctor, date)}
               />
             ))}
           </div>
@@ -207,40 +226,94 @@ function DoctorCard({
   highlight?: boolean;
   reserving: boolean;
   onBook: () => void;
-  onBrowse: () => void;
+  onBrowse: (date?: string) => void;
 }) {
   return (
     <Card className={highlight ? 'border-[1.5px] border-primary' : undefined}>
-      <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3.5">
-          <DoctorAvatar name={doctor.name} specialty={doctor.specialty} photoUrl={doctor.photoUrl} size={46} />
-          <div className="min-w-0">
-            <p className="truncate text-[14px] font-semibold">{doctor.name}</p>
-            <p className="truncate text-[12px] text-muted-foreground">{doctor.specialty}</p>
-            <p className="mt-0.5 truncate text-[12.5px] font-medium text-primary">
-              {doctor.nextSlot ? formatNextSlot(doctor.nextSlot.start) : 'No availability in the next two weeks'}
-            </p>
+      <CardContent className="flex flex-col gap-3.5 pt-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-3.5">
+            <DoctorAvatar name={doctor.name} specialty={doctor.specialty} photoUrl={doctor.photoUrl} size={46} />
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-semibold">{doctor.name}</p>
+              <p className="truncate text-[12px] text-muted-foreground">{doctor.specialty}</p>
+              <p className="mt-0.5 truncate text-[12.5px] font-medium text-primary">
+                {doctor.nextSlot ? formatNextSlot(doctor.nextSlot.start) : 'No availability in this range'}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onBrowse()}
+              className="press-scale flex min-h-[40px] items-center justify-center rounded-control border bg-surface px-3 text-[12.5px] font-semibold hover:bg-muted"
+            >
+              More times
+            </button>
+            <button
+              type="button"
+              disabled={!doctor.nextSlot || reserving}
+              onClick={onBook}
+              className="press-scale flex min-h-[40px] items-center justify-center rounded-control bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            >
+              {reserving ? 'Booking…' : `Book · ${formatCurrency(doctor.priceMinor, 'KWD')}`}
+            </button>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={onBrowse}
-            className="press-scale flex min-h-[40px] items-center justify-center rounded-control border bg-surface px-3 text-[12.5px] font-semibold hover:bg-muted"
-          >
-            More times
-          </button>
-          <button
-            type="button"
-            disabled={!doctor.nextSlot || reserving}
-            onClick={onBook}
-            className="press-scale flex min-h-[40px] items-center justify-center rounded-control bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-          >
-            {reserving ? 'Booking…' : `Book · ${formatCurrency(doctor.priceMinor, 'KWD')}`}
-          </button>
-        </div>
+        {doctor.availableDays.length > 0 && (
+          <AvailabilityStrip days={doctor.availableDays} onSelectDay={(date) => onBrowse(date)} />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Compact per-day availability heatmap for one doctor: one segment per day
+ * in the searched range, shaded by how many slots are open that day. Lets a
+ * patient see the SHAPE of a doctor's availability across the whole range at
+ * a glance (a doctor free every morning vs. one free only on two scattered
+ * days looks identical as a single "next slot" line, but not as a strip) —
+ * clicking a day jumps straight into that doctor's picker on that date.
+ */
+function AvailabilityStrip({
+  days,
+  onSelectDay,
+}: {
+  days: { date: string; count: number }[];
+  onSelectDay: (date: string) => void;
+}) {
+  const maxCount = Math.max(1, ...days.map((d) => d.count));
+  const today = new Date().toISOString().slice(0, 10);
+
+  return (
+    <div className="flex items-end gap-[3px]" role="group" aria-label="Availability by day">
+      {days.map((d) => {
+        const intensity = d.count === 0 ? 0 : Math.max(0.22, d.count / maxCount);
+        const date = new Date(`${d.date}T00:00:00`);
+        const label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+        return (
+          <button
+            key={d.date}
+            type="button"
+            disabled={d.count === 0}
+            onClick={() => onSelectDay(d.date)}
+            title={`${label} — ${d.count} slot${d.count === 1 ? '' : 's'}`}
+            aria-label={`${label}, ${d.count} slot${d.count === 1 ? '' : 's'}`}
+            className={cn(
+              'h-6 flex-1 rounded-[3px] transition-transform',
+              d.count === 0 ? 'cursor-not-allowed bg-muted' : 'cursor-pointer hover:scale-y-110',
+              d.date === today && d.count > 0 && 'ring-1 ring-primary/50',
+            )}
+            style={
+              d.count > 0
+                ? { backgroundColor: `color-mix(in srgb, hsl(var(--primary)) ${Math.round(intensity * 100)}%, transparent)` }
+                : undefined
+            }
+          />
+        );
+      })}
+    </div>
   );
 }
 

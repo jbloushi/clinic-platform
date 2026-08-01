@@ -12,6 +12,7 @@ const patchSchema = z.object({
   slotSearchWindowDays: z.number().int().min(1).max(180),
   slotQuantumMinutes: z.number().int().min(1).max(60),
   showDoctorNameBeforePayment: z.boolean(),
+  crossBranchBufferMinutes: z.number().int().min(0).max(240),
 });
 
 /**

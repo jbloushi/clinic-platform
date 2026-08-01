@@ -184,7 +184,7 @@ export const openemrProvider: DataProvider = {
       listAvailabilityRules(practitionerId, opts?.branchId),
       resolvePractitionerNumericId(practitionerId),
     ]);
-    return computeAvailableSlots(practitionerId, availability, from, to, slotMinutes, numericId);
+    return computeAvailableSlots(practitionerId, availability, from, to, slotMinutes, numericId, opts?.branchId);
   },
 
   async getAppointments(q: AppointmentQuery = {}): Promise<Appointment[]> {

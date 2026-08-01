@@ -23,8 +23,6 @@ const envSchema = z.object({
    */
   BRANCH_FILTERING_ENABLED: z.enum(['true', 'false']).default('false'),
 
-  /** Shows the flag-gated /book/v2 link in the old booking entry point. */
-  BOOKING_JOURNEY_V2_ENABLED: z.enum(['true', 'false']).default('false'),
   /** Whether the auto-assignment pool is used at all; off falls back to patient choice only. */
   AUTO_ASSIGNMENT_ENABLED: z.enum(['true', 'false']).default('true'),
   /** Whether /book/v2 gates finalization on payment. Off skips straight to EMR creation. */
@@ -76,6 +74,5 @@ export const env = envSchema.parse(process.env);
 export const useMock = env.USE_MOCK_DATA === 'true';
 export const allowWrites = env.ALLOW_WRITES === 'true';
 export const branchFilteringEnabled = env.BRANCH_FILTERING_ENABLED === 'true';
-export const bookingJourneyV2Enabled = env.BOOKING_JOURNEY_V2_ENABLED === 'true';
 export const autoAssignmentEnabled = env.AUTO_ASSIGNMENT_ENABLED === 'true';
 export const paymentFinalizationEnabled = env.PAYMENT_FINALIZATION_ENABLED === 'true';

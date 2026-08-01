@@ -29,7 +29,7 @@ export async function PublicHeader() {
         <div className="ms-auto flex items-center gap-2 md:ms-1">
           <LanguageSwitcher locale={locale} />
           <Button asChild size="sm" className="hidden rounded-control sm:inline-flex">
-            <Link href="/book">
+            <Link href="/book/v2">
               <CalendarDays />
               Book appointment
             </Link>
@@ -46,7 +46,7 @@ export async function PublicHeader() {
               aria-label="Mobile navigation"
             >
               <Link
-                href="/book"
+                href="/book/v2"
                 className="mb-1 flex min-h-11 items-center gap-2 rounded-control bg-primary px-3 py-3 text-sm font-semibold text-primary-foreground"
               >
                 <CalendarDays className="h-4 w-4" />

@@ -1,4 +1,5 @@
 import type { DataProvider } from '../provider';
+import { getCrossBranchBufferRanges } from '../travel-buffer';
 import type {
   Appointment,
   AppointmentQuery,
@@ -195,6 +196,17 @@ export const mockProvider: DataProvider = {
   async getAvailableSlots(practitionerId, from, to, slotMinutes, opts) {
     const practitioner = practitioners.find((item) => item.id === practitionerId && item.active);
     if (!practitioner) return [];
+    // Same source as the OpenEMR provider: cross-branch buffer ranges live in
+    // the platform's own BookingHold table, not in the mock fixtures, so this
+    // reuses the identical helper for parity between the two providers.
+    const bufferRanges = opts?.branchId
+      ? await getCrossBranchBufferRanges(
+          practitionerId,
+          opts.branchId,
+          new Date(`${from}T00:00:00.000Z`),
+          new Date(`${to}T23:59:59.000Z`),
+        )
+      : [];
     const slots: Slot[] = [];
     for (let cursor = new Date(`${from}T00:00:00.000Z`); cursor <= new Date(`${to}T00:00:00.000Z`); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
       const date = cursor.toISOString().slice(0, 10);
@@ -211,7 +223,9 @@ export const mockProvider: DataProvider = {
         const endOfDay = Date.parse(`${date}T${rule.endTime}:00.000Z`);
         for (let start = startOfDay; start + minutes * 60_000 <= endOfDay; start += minutes * 60_000) {
           const end = start + minutes * 60_000;
-          const available = !appointments.some((appointment) => appointment.practitionerId === practitionerId && appointment.status !== 'cancelled' && Date.parse(appointment.start) < end && Date.parse(appointment.end) > start);
+          const bookedElsewhere = appointments.some((appointment) => appointment.practitionerId === practitionerId && appointment.status !== 'cancelled' && Date.parse(appointment.start) < end && Date.parse(appointment.end) > start);
+          const buffered = bufferRanges.some((r) => r.start < end && r.end > start);
+          const available = !bookedElsewhere && !buffered;
           slots.push({ practitionerId, start: new Date(start).toISOString(), end: new Date(end).toISOString(), available });
         }
       }

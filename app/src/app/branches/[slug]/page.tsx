@@ -55,7 +55,7 @@ export default async function BranchPage({ params }: { params: Promise<{ slug: s
           </p>
           <div className="mt-5 flex flex-wrap gap-2.5">
             <Button asChild className="rounded-control">
-              <Link href={`/book?branch=${branch.slug}`}>Book at {name}</Link>
+              <Link href={`/book/v2?branch=${branch.slug}`}>Book at {name}</Link>
             </Button>
             {branch.mapUrl && (
               <Button asChild variant="outline" className="rounded-control">

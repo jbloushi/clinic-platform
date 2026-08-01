@@ -34,6 +34,7 @@ export function PractitionerSlotPicker({
   bookingEntryPath,
   onBack,
   backLabel = 'Change service',
+  initialDate,
 }: {
   practitionerUuid: string;
   practitionerName: string;
@@ -50,10 +51,12 @@ export function PractitionerSlotPicker({
   bookingEntryPath: BookingEntryPath;
   onBack: () => void;
   backLabel?: string;
+  /** Opens the week containing this date instead of the current week — used when arriving from a specific day picked on the availability strip. */
+  initialDate?: string;
 }) {
   const router = useRouter();
-  const [weekStart, setWeekStart] = useState(() => new Date().toISOString().slice(0, 10));
-  const [selectedDate, setSelectedDate] = useState(weekStart);
+  const [weekStart, setWeekStart] = useState(() => initialDate ?? new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(() => initialDate ?? new Date().toISOString().slice(0, 10));
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reserveError, setReserveError] = useState<string | null>(null);

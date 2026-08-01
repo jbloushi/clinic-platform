@@ -365,9 +365,9 @@ export function ConsultWorkspace({
                 {followUpRequested.text} — book it now and it will be linked to today&apos;s visit.
               </p>
               <Link
-                href={`/book?practitionerId=${encodeURIComponent(
+                href={`/doctors/${encodeURIComponent(
                   appointment.practitionerId,
-                )}&followUpFrom=${encodeURIComponent(originBookingId)}`}
+                )}?followUpFrom=${encodeURIComponent(originBookingId)}#booking`}
                 className="press-scale mt-3 inline-flex min-h-[44px] items-center rounded-control bg-primary px-4 text-[13px] font-semibold text-primary-foreground hover:bg-primary/90"
               >
                 Book the follow-up

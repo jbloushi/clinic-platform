@@ -70,7 +70,7 @@ export default async function HomePage() {
                     branches={branches.map((branch) => ({
                       slug: branch.slug,
                       label: locale === 'ar' ? branch.nameAr : branch.nameEn,
-                      href: `/book?branch=${branch.slug}`,
+                      href: `/book/v2?branch=${branch.slug}`,
                     }))}
                   />
                 </div>
@@ -179,7 +179,7 @@ export default async function HomePage() {
             </p>
             <div className="mt-3.5 flex flex-wrap gap-2.5">
               <Button asChild size="sm" className="rounded-control">
-                <Link href="/book">
+                <Link href="/book/v2">
                   <CalendarCheck />
                   Book an appointment
                 </Link>

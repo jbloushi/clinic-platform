@@ -80,7 +80,7 @@ export default async function MyAppointmentsPage({
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-editorial text-[22px] font-semibold">My visits</h1>
         <Button asChild size="sm" className="rounded-control">
-          <Link href="/book">
+          <Link href="/book/v2">
             <CalendarPlus className="h-4 w-4" />
             Book
           </Link>
@@ -139,7 +139,7 @@ export default async function MyAppointmentsPage({
                     // so the rebook carries the original forward rather than
                     // starting an unrelated appointment.
                     <Link
-                      href={`/book?practitionerId=${booking.practitionerOpenemrId}&serviceId=${booking.serviceId}&followUpFrom=${booking.id}`}
+                      href={`/doctors/${booking.practitionerOpenemrId}?serviceId=${booking.serviceId}&followUpFrom=${booking.id}#booking`}
                       className="flex min-h-[48px] items-center justify-center px-4 text-[13px] font-semibold text-primary hover:bg-tint-teal"
                     >
                       Book a follow-up

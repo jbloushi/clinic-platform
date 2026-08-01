@@ -34,7 +34,7 @@ export default async function DepartmentPage({ params }: { params: Promise<{ slu
 
         <div className="mt-7 flex flex-wrap gap-3">
           <Button asChild className="rounded-control">
-            <Link href={`/book?department=${department.slug}`}>Book in this department</Link>
+            <Link href={`/book/v2?department=${department.slug}`}>Book in this department</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-control">
             {/* By department slug, not by specialty name. The doctor list resolves

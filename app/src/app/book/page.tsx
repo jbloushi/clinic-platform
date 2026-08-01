@@ -3,31 +3,43 @@ import { redirect } from 'next/navigation';
 import { Building2, ChevronRight } from 'lucide-react';
 import { BookShell } from '@/components/domain/book-shell';
 import { getDataProvider } from '@/lib/data';
-import { getBookableService, getEligibleServicesForSpecialist } from '@/lib/data/service-catalog';
-import { getBranchBySlug, listBranches, listDepartments } from '@/lib/data/reference-repo';
+import { getEligibleServicesForSpecialist } from '@/lib/data/service-catalog';
+import { getBranchBySlug, listBranches } from '@/lib/data/reference-repo';
 import { getLocale } from '@/lib/i18n-server';
-import { bookingJourneyV2Enabled } from '@/lib/env';
 import { BookingForm } from './form';
-import { BookingEntry } from './booking-entry';
 
 export const dynamic = 'force-dynamic';
 
+/**
+ * Narrow "practitioner + a slot already chosen elsewhere → confirm & pay"
+ * endpoint. This used to also be the general booking ENTRY POINT (branch →
+ * service/doctor search), which is why it grew a `service`-without-`branch`
+ * redirect into `/book/service` that could loop forever whenever a link
+ * carried a service but no branch (every "Book" CTA on a service/department
+ * page did exactly that). That entry-point role now belongs to `/book/v2`
+ * exclusively — this route no longer has any redirect that can point back at
+ * itself or at a page that redirects back here, so a loop is structurally
+ * impossible: every path below is a single hop to a terminal page.
+ *
+ * Reached only from: `/doctors/[id]`'s in-page slot picker (practitionerId +
+ * start + end, already carrying its own branch/service) and the consult
+ * workspace's follow-up link (followUpFrom + practitionerId, no slot yet).
+ * Anything else — including old bookmarked links from before this route was
+ * narrowed — lands on `/book/v2` to start a fresh search.
+ */
 export default async function BookPage({
   searchParams,
 }: {
   searchParams: Promise<{
     practitionerId?: string;
     serviceId?: string;
-    service?: string;
-    department?: string;
     branch?: string;
     start?: string;
     end?: string;
     followUpFrom?: string;
   }>;
 }) {
-  const { practitionerId, serviceId, service, department, branch, start, end, followUpFrom } =
-    await searchParams;
+  const { practitionerId, serviceId, branch, start, end, followUpFrom } = await searchParams;
   const locale = await getLocale();
   const selectedBranch = branch ? await getBranchBySlug(branch) : null;
   const branchName = selectedBranch
@@ -45,42 +57,11 @@ export default async function BookPage({
     redirect(`/doctors/${encodeURIComponent(practitionerId)}?${params}#booking`);
   }
 
-  if ((!start || !end) && (serviceId || service)) {
-    redirect(
-      `/book/service?service=${encodeURIComponent(serviceId ?? service ?? '')}${
-        department ? `&department=${encodeURIComponent(department)}` : ''
-      }${branch ? `&branch=${encodeURIComponent(branch)}` : ''}`,
-    );
-  }
-
-  if (!start || !end || (!practitionerId && !serviceId)) {
-    const [entryBranches, entryDepartments] = await Promise.all([
-      listBranches({ publishedOnly: true }),
-      listDepartments({ publishedOnly: true }),
-    ]);
-
-    return (
-      <BookShell
-        backHref="/"
-        title="Let’s find the right appointment"
-        description="Start with a service, department, doctor, or the earliest suitable time."
-      >
-        <BookingEntry
-          branches={entryBranches.map((item) => ({
-            slug: item.slug,
-            name: locale === 'ar' ? item.nameAr : item.nameEn,
-            area: locale === 'ar' ? item.areaAr : item.areaEn,
-          }))}
-          departments={entryDepartments.map((item) => ({
-            slug: item.slug,
-            name: locale === 'ar' ? item.nameAr : item.nameEn,
-          }))}
-          initialDepartment={department}
-          initialBranch={branch}
-          v2Enabled={bookingJourneyV2Enabled}
-        />
-      </BookShell>
-    );
+  // Not a practitioner+slot confirmation — nothing left for this route to do.
+  if (!practitionerId || !start || !end) {
+    const params = new URLSearchParams();
+    if (branch) params.set('branch', branch);
+    redirect(`/book/v2${params.size ? `?${params}` : ''}`);
   }
 
   // Branch is decided before the visit is committed, not after. A slot chosen
@@ -96,7 +77,7 @@ export default async function BookPage({
 
     return (
       <BookShell
-        backHref={practitionerId ? `/doctors/${practitionerId}#booking` : '/book/service'}
+        backHref={`/doctors/${practitionerId}#booking`}
         backLabel="Change slot"
         title="Which branch?"
         description="Choose where you’d like to be seen. Your selected time stays the same."
@@ -106,80 +87,39 @@ export default async function BookPage({
     );
   }
 
-  if (practitionerId) {
-    const doctor = await getDataProvider().getPractitionerById(practitionerId);
-    if (!doctor) redirect('/doctors');
-    // Only services this specialist is eligible for (unrestricted, or explicitly
-    // linked). Doctor-only services surface here for eligible docs even though
-    // they're hidden from /book/service.
-    const services = await getEligibleServicesForSpecialist(practitionerId);
-
-    // Arriving from /book/service the patient already chose the service before
-    // the doctor, so lock the form to it instead of reopening the choice.
-    const preselected = serviceId ? services.find((s) => s.id === serviceId) : undefined;
-    const offered = preselected ? [preselected] : services;
-    // Same origin, so "change slot" returns to where the slot was actually picked.
-    const slotHref = serviceId
-      ? `/book/service?service=${encodeURIComponent(serviceId)}&branch=${branch}`
-      : `/doctors/${practitionerId}?branch=${branch}#booking`;
-
-    return (
-      <BookShell
-        backHref={slotHref}
-        backLabel="Change slot"
-        title={followUpFrom ? 'Confirm your follow-up' : 'Your details'}
-      >
-        <BookingForm
-          practitionerId={practitionerId}
-          followUpFromBookingId={followUpFrom}
-          practitionerName={`${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim()}
-          practitionerSpecialty={doctor.specialty}
-          practitionerPhotoUrl={doctor.photoUrl}
-          start={start}
-          end={end}
-          consultationFeeMinor={preselected?.priceMinor ?? doctor.consultationFeeMinor}
-          currency={doctor.currency}
-          branchName={branchName}
-          branchSlug={selectedBranch.slug}
-          editHref={slotHref}
-          services={offered.map((s) => ({
-            id: s.id,
-            name: s.name,
-            durationMinutes: s.durationMinutes,
-            priceMinor: s.priceMinor,
-          }))}
-        />
-      </BookShell>
-    );
-  }
-
-  // Service-first flow — no practitionerId yet; auto-assigned at commit time.
-  // Only reached from /book/service, so a doctor-only service (hidden from
-  // search) shouldn't be bookable here either.
-  const selectedService = await getBookableService(serviceId!);
-  if (!selectedService || !selectedService.active || !selectedService.showInServiceSearch) {
-    redirect('/book/service');
-  }
-
-  const serviceSlotHref = `/book/service?service=${encodeURIComponent(selectedService.id)}&branch=${branch}`;
+  const doctor = await getDataProvider().getPractitionerById(practitionerId);
+  if (!doctor) redirect('/doctors');
+  // Only services this specialist is eligible for (unrestricted, or explicitly linked).
+  const services = await getEligibleServicesForSpecialist(practitionerId);
+  const preselected = serviceId ? services.find((s) => s.id === serviceId) : undefined;
+  const offered = preselected ? [preselected] : services;
+  const slotHref = `/doctors/${practitionerId}?branch=${branch}#booking`;
 
   return (
-    <BookShell backHref={serviceSlotHref} backLabel="Change slot" title="Your details">
+    <BookShell
+      backHref={slotHref}
+      backLabel="Change slot"
+      title={followUpFrom ? 'Confirm your follow-up' : 'Your details'}
+    >
       <BookingForm
+        practitionerId={practitionerId}
+        followUpFromBookingId={followUpFrom}
+        practitionerName={`${doctor.title} ${doctor.firstName} ${doctor.lastName}`.trim()}
+        practitionerSpecialty={doctor.specialty}
+        practitionerPhotoUrl={doctor.photoUrl}
         start={start}
         end={end}
-        consultationFeeMinor={selectedService.priceMinor}
-        currency={selectedService.currency}
+        consultationFeeMinor={preselected?.priceMinor ?? doctor.consultationFeeMinor}
+        currency={doctor.currency}
         branchName={branchName}
-        editHref={serviceSlotHref}
-        services={[
-          {
-            id: selectedService.id,
-            name: selectedService.name,
-            durationMinutes: selectedService.durationMinutes,
-            priceMinor: selectedService.priceMinor,
-          },
-        ]}
+        branchSlug={selectedBranch.slug}
+        editHref={slotHref}
+        services={offered.map((s) => ({
+          id: s.id,
+          name: s.name,
+          durationMinutes: s.durationMinutes,
+          priceMinor: s.priceMinor,
+        }))}
       />
     </BookShell>
   );

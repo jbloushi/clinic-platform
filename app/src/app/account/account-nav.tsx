@@ -8,7 +8,7 @@ const TOP_ITEMS = [
   { href: '/account/appointments', label: 'My visits' },
   { href: '/account/records', label: 'Medical records' },
   { href: '/account/profile', label: 'Profile' },
-  { href: '/book', label: 'Book' },
+  { href: '/book/v2', label: 'Book' },
 ];
 
 /**

@@ -103,7 +103,7 @@ export function buildClinicSearchIndex({
       kind: 'reason',
       label: reason.label[locale],
       sublabel: 'Opens the matching consultation',
-      href: `/book/service?service=${encodeURIComponent(reason.serviceSlug)}`,
+      href: `/book/v2?service=${encodeURIComponent(reason.serviceSlug)}`,
       keywords: [
         normalize(reason.label.en),
         normalize(reason.label.ar),

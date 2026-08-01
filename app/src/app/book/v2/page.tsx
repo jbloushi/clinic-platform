@@ -8,9 +8,9 @@ export const dynamic = 'force-dynamic';
 export default async function BookV2Page({
   searchParams,
 }: {
-  searchParams: Promise<{ branch?: string }>;
+  searchParams: Promise<{ branch?: string; department?: string; service?: string }>;
 }) {
-  const { branch } = await searchParams;
+  const { branch, department, service } = await searchParams;
   const locale = await getLocale();
   const branches = await listBranches({ publishedOnly: true });
 
@@ -27,6 +27,8 @@ export default async function BookV2Page({
           area: locale === 'ar' ? item.areaAr : item.areaEn,
         }))}
         initialBranch={branch}
+        initialDepartment={department}
+        initialService={service}
       />
     </BookShell>
   );
