@@ -3,11 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Sparkles } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { DoctorAvatar } from '@/components/domain/avatar';
-import { EmptyState, LoadingState } from '@/components/domain/states';
-import { cn, formatCurrency, formatTime } from '@/lib/utils';
+import { LoadingState } from '@/components/domain/states';
 import { PractitionerSlotPicker } from '../practitioner-slot-picker';
+import { DoctorAvailabilityCard, type PreviewSlot } from '../_shared/doctor-availability-card';
 
 export type DoctorForService = {
   uuid: string;
@@ -17,9 +15,9 @@ export type DoctorForService = {
   photoUrl: string | null;
   durationMinutes: number;
   priceMinor: number;
-  nextSlot: { start: string; end: string } | null;
-  /** Slot count per calendar day across the searched range — powers the availability strip. */
-  availableDays: { date: string; count: number }[];
+  nextSlot: PreviewSlot | null;
+  /** Up to 5 quick-book times, one per day — see getAvailabilitySummary. */
+  previewSlots: PreviewSlot[];
 };
 
 type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMinor: number; currency: string };
@@ -27,10 +25,10 @@ type ServiceOpt = { id: string; name: string; durationMinutes: number; priceMino
 /**
  * "First available (recommended)" + "other doctors", sorted by soonest
  * availability — the doctor-transparent alternative to a blind slot grid.
- * Every card names a specific doctor, so both "book the recommended time"
- * and "see more times with Dr. X" go through `createPractitionerSelectedBookingHold`
- * (never the blind auto-assign path) — the patient always knows who they
- * booked because they always picked a named card.
+ * Both a quick-book tap on a previewed time and "see more times with Dr. X"
+ * go through `createPractitionerSelectedBookingHold` (never the blind
+ * auto-assign path) — the patient always knows who they booked because they
+ * always picked a named card.
  */
 export function DoctorRecommendationStep({
   service,
@@ -53,9 +51,8 @@ export function DoctorRecommendationStep({
   const [doctors, setDoctors] = useState<DoctorForService[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reserveError, setReserveError] = useState<string | null>(null);
-  const [reserving, setReserving] = useState<string | null>(null);
+  const [reservingSlot, setReservingSlot] = useState<{ uuid: string; start: string } | null>(null);
   const [browsingDoctor, setBrowsingDoctor] = useState<DoctorForService | null>(null);
-  const [browseDate, setBrowseDate] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
@@ -101,24 +98,15 @@ export function DoctorRecommendationStep({
         branchId={branchId}
         branchSlug={branchSlug}
         bookingEntryPath="SERVICE_PATH"
-        onBack={() => {
-          setBrowsingDoctor(null);
-          setBrowseDate(undefined);
-        }}
+        onBack={() => setBrowsingDoctor(null)}
         backLabel="Back to doctors"
-        initialDate={browseDate}
+        initialDate={browsingDoctor.nextSlot?.start.slice(0, 10)}
       />
     );
   }
 
-  function browse(doctor: DoctorForService, date?: string) {
-    setBrowseDate(date);
-    setBrowsingDoctor(doctor);
-  }
-
-  async function bookRecommended(doctor: DoctorForService) {
-    if (!doctor.nextSlot) return;
-    setReserving(doctor.uuid);
+  async function bookSlot(doctor: DoctorForService, slot: PreviewSlot) {
+    setReservingSlot({ uuid: doctor.uuid, start: slot.start });
     setReserveError(null);
     try {
       const res = await fetch('/api/booking-holds', {
@@ -129,8 +117,8 @@ export function DoctorRecommendationStep({
           departmentId: doctor.departmentId,
           branchId,
           specialistOpenemrUuid: doctor.uuid,
-          start: doctor.nextSlot.start,
-          end: doctor.nextSlot.end,
+          start: slot.start,
+          end: slot.end,
           bookingEntryPath: 'SERVICE_PATH',
         }),
       });
@@ -145,7 +133,7 @@ export function DoctorRecommendationStep({
       }
       router.push(`/book/v2/details?holdId=${data.holdId}&branch=${branchSlug}`);
     } finally {
-      setReserving(null);
+      setReservingSlot(null);
     }
   }
 
@@ -180,13 +168,16 @@ export function DoctorRecommendationStep({
         <h2 className="mb-2.5 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-primary">
           <Sparkles className="h-3.5 w-3.5" aria-hidden /> Recommended
         </h2>
-        <DoctorCard
-          doctor={recommended}
-          service={service}
+        <DoctorAvailabilityCard
+          name={recommended.name}
+          specialty={recommended.specialty}
+          photoUrl={recommended.photoUrl}
+          previewSlots={recommended.previewSlots}
+          priceMinor={recommended.priceMinor}
           highlight
-          reserving={reserving === recommended.uuid}
-          onBook={() => bookRecommended(recommended)}
-          onBrowse={(date) => browse(recommended, date)}
+          reservingSlotStart={reservingSlot?.uuid === recommended.uuid ? reservingSlot.start : null}
+          onSlotClick={(slot) => bookSlot(recommended, slot)}
+          onMoreTimes={() => setBrowsingDoctor(recommended)}
         />
       </section>
 
@@ -197,13 +188,16 @@ export function DoctorRecommendationStep({
           </h2>
           <div className="space-y-2.5">
             {rest.map((doctor) => (
-              <DoctorCard
+              <DoctorAvailabilityCard
                 key={doctor.uuid}
-                doctor={doctor}
-                service={service}
-                reserving={reserving === doctor.uuid}
-                onBook={() => bookRecommended(doctor)}
-                onBrowse={(date) => browse(doctor, date)}
+                name={doctor.name}
+                specialty={doctor.specialty}
+                photoUrl={doctor.photoUrl}
+                previewSlots={doctor.previewSlots}
+                priceMinor={doctor.priceMinor}
+                reservingSlotStart={reservingSlot?.uuid === doctor.uuid ? reservingSlot.start : null}
+                onSlotClick={(slot) => bookSlot(doctor, slot)}
+                onMoreTimes={() => setBrowsingDoctor(doctor)}
               />
             ))}
           </div>
@@ -211,123 +205,4 @@ export function DoctorRecommendationStep({
       )}
     </div>
   );
-}
-
-function DoctorCard({
-  doctor,
-  service,
-  highlight,
-  reserving,
-  onBook,
-  onBrowse,
-}: {
-  doctor: DoctorForService;
-  service: ServiceOpt;
-  highlight?: boolean;
-  reserving: boolean;
-  onBook: () => void;
-  onBrowse: (date?: string) => void;
-}) {
-  return (
-    <Card className={highlight ? 'border-[1.5px] border-primary' : undefined}>
-      <CardContent className="flex flex-col gap-3.5 pt-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 items-center gap-3.5">
-            <DoctorAvatar name={doctor.name} specialty={doctor.specialty} photoUrl={doctor.photoUrl} size={46} />
-            <div className="min-w-0">
-              <p className="truncate text-[14px] font-semibold">{doctor.name}</p>
-              <p className="truncate text-[12px] text-muted-foreground">{doctor.specialty}</p>
-              <p className="mt-0.5 truncate text-[12.5px] font-medium text-primary">
-                {doctor.nextSlot ? formatNextSlot(doctor.nextSlot.start) : 'No availability in this range'}
-              </p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => onBrowse()}
-              className="press-scale flex min-h-[40px] items-center justify-center rounded-control border bg-surface px-3 text-[12.5px] font-semibold hover:bg-muted"
-            >
-              More times
-            </button>
-            <button
-              type="button"
-              disabled={!doctor.nextSlot || reserving}
-              onClick={onBook}
-              className="press-scale flex min-h-[40px] items-center justify-center rounded-control bg-primary px-3.5 text-[12.5px] font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-            >
-              {reserving ? 'Booking…' : `Book · ${formatCurrency(doctor.priceMinor, 'KWD')}`}
-            </button>
-          </div>
-        </div>
-        {doctor.availableDays.length > 0 && (
-          <AvailabilityStrip days={doctor.availableDays} onSelectDay={(date) => onBrowse(date)} />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/**
- * Compact per-day availability heatmap for one doctor: one segment per day
- * in the searched range, shaded by how many slots are open that day. Lets a
- * patient see the SHAPE of a doctor's availability across the whole range at
- * a glance (a doctor free every morning vs. one free only on two scattered
- * days looks identical as a single "next slot" line, but not as a strip) —
- * clicking a day jumps straight into that doctor's picker on that date.
- */
-function AvailabilityStrip({
-  days,
-  onSelectDay,
-}: {
-  days: { date: string; count: number }[];
-  onSelectDay: (date: string) => void;
-}) {
-  const maxCount = Math.max(1, ...days.map((d) => d.count));
-  const today = new Date().toISOString().slice(0, 10);
-
-  return (
-    <div className="flex items-end gap-[3px]" role="group" aria-label="Availability by day">
-      {days.map((d) => {
-        const intensity = d.count === 0 ? 0 : Math.max(0.22, d.count / maxCount);
-        const date = new Date(`${d.date}T00:00:00`);
-        const label = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
-        return (
-          <button
-            key={d.date}
-            type="button"
-            disabled={d.count === 0}
-            onClick={() => onSelectDay(d.date)}
-            title={`${label} — ${d.count} slot${d.count === 1 ? '' : 's'}`}
-            aria-label={`${label}, ${d.count} slot${d.count === 1 ? '' : 's'}`}
-            className={cn(
-              'h-6 flex-1 rounded-[3px] transition-transform',
-              d.count === 0 ? 'cursor-not-allowed bg-muted' : 'cursor-pointer hover:scale-y-110',
-              d.date === today && d.count > 0 && 'ring-1 ring-primary/50',
-            )}
-            style={
-              d.count > 0
-                ? { backgroundColor: `color-mix(in srgb, hsl(var(--primary)) ${Math.round(intensity * 100)}%, transparent)` }
-                : undefined
-            }
-          />
-        );
-      })}
-    </div>
-  );
-}
-
-function formatNextSlot(startIso: string): string {
-  const date = new Date(startIso);
-  const today = new Date();
-  const isToday = date.toDateString() === today.toDateString();
-  const tomorrow = new Date(today);
-  tomorrow.setDate(today.getDate() + 1);
-  const isTomorrow = date.toDateString() === tomorrow.toDateString();
-  const day = isToday
-    ? 'Today'
-    : isTomorrow
-      ? 'Tomorrow'
-      : date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
-  return `${day} at ${formatTime(startIso)}`;
 }

@@ -1,12 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { DoctorAvatar } from '@/components/domain/avatar';
 import { EmptyState } from '@/components/domain/states';
-import { formatCurrency, formatTime } from '@/lib/utils';
+import { formatCurrency } from '@/lib/utils';
 import { PractitionerSlotPicker } from '../practitioner-slot-picker';
+import { DoctorAvailabilityCard, type PreviewSlot } from '../_shared/doctor-availability-card';
 
 export type DoctorServiceOpt = {
   id: string;
@@ -24,10 +24,17 @@ export type DoctorOpt = {
   photoUrl: string | null;
   services: DoctorServiceOpt[];
   /** Earliest open slot across any of this doctor's offerings, for sorting/display. */
-  nextAvailable?: { start: string; end: string } | null;
+  nextAvailable?: PreviewSlot | null;
+  /** Up to 5 quick-pick times, one per day — no service chosen yet, so these are a preview only. */
+  previewSlots: PreviewSlot[];
 };
 
-/** Doctor-path booking: pick the doctor, then their service, then a real time. */
+/**
+ * Doctor-path booking: pick the doctor (optionally tapping a previewed time
+ * to carry the date forward), then their service, then a real time. Uses the
+ * same card design as the department flow's doctor list — see
+ * DoctorAvailabilityCard — so the two entry paths feel like one system.
+ */
 export function DoctorFlow({
   branchSlug,
   branchId,
@@ -39,10 +46,34 @@ export function DoctorFlow({
 }) {
   const [doctor, setDoctor] = useState<DoctorOpt | null>(null);
   const [service, setService] = useState<DoctorServiceOpt | null>(null);
+  // A service isn't known yet when a preview time is tapped (duration/price
+  // depend on it), so the tap can't book directly like the department flow's
+  // can — it carries the picked date forward instead, and the real slot
+  // picker opens already on that date once the service step resolves it.
+  const [jumpDate, setJumpDate] = useState<string | undefined>(undefined);
 
-  if (!doctor) return <DoctorPicker doctors={doctors} onSelect={setDoctor} />;
+  if (!doctor) {
+    return (
+      <DoctorPicker
+        doctors={doctors}
+        onSelect={(d, date) => {
+          setJumpDate(date);
+          setDoctor(d);
+        }}
+      />
+    );
+  }
   if (!service) {
-    return <ServicePicker doctor={doctor} onSelect={setService} onBack={() => setDoctor(null)} />;
+    return (
+      <ServicePicker
+        doctor={doctor}
+        onSelect={setService}
+        onBack={() => {
+          setDoctor(null);
+          setJumpDate(undefined);
+        }}
+      />
+    );
   }
   return (
     <PractitionerSlotPicker
@@ -61,11 +92,18 @@ export function DoctorFlow({
       bookingEntryPath="DOCTOR_PATH"
       onBack={() => setService(null)}
       backLabel="Change service"
+      initialDate={jumpDate}
     />
   );
 }
 
-function DoctorPicker({ doctors, onSelect }: { doctors: DoctorOpt[]; onSelect: (d: DoctorOpt) => void }) {
+function DoctorPicker({
+  doctors,
+  onSelect,
+}: {
+  doctors: DoctorOpt[];
+  onSelect: (d: DoctorOpt, date?: string) => void;
+}) {
   if (doctors.length === 0) {
     return (
       <Card>
@@ -76,24 +114,18 @@ function DoctorPicker({ doctors, onSelect }: { doctors: DoctorOpt[]; onSelect: (
     );
   }
   return (
-    <div className="grid gap-3 lg:grid-cols-2">
+    <div className="space-y-2.5">
       {doctors.map((d) => (
-        <button
+        <DoctorAvailabilityCard
           key={d.uuid}
-          type="button"
-          onClick={() => onSelect(d)}
-          className="press-scale flex min-h-[72px] items-center gap-3.5 rounded-card border bg-surface p-4 text-start hover:border-primary"
-        >
-          <DoctorAvatar name={d.name} specialty={d.specialty} photoUrl={d.photoUrl} size={46} />
-          <span className="min-w-0 flex-1">
-            <span className="block truncate text-[14px] font-semibold">{d.name}</span>
-            <span className="block truncate text-[12px] text-muted-foreground">{d.specialty}</span>
-            <span className="mt-0.5 block truncate text-[11.5px] font-medium text-primary">
-              {formatNextAvailable(d.nextAvailable)}
-            </span>
-          </span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-primary rtl:rotate-180" aria-hidden />
-        </button>
+          name={d.name}
+          specialty={d.specialty}
+          photoUrl={d.photoUrl}
+          previewSlots={d.previewSlots}
+          onSlotClick={(slot) => onSelect(d, slot.start.slice(0, 10))}
+          onMoreTimes={() => onSelect(d)}
+          moreTimesLabel="Choose a time"
+        />
       ))}
     </div>
   );
@@ -142,12 +174,4 @@ function ServicePicker({
       </div>
     </div>
   );
-}
-
-function formatNextAvailable(next?: { start: string; end: string } | null): string {
-  if (next === undefined) return '';
-  if (next === null) return 'No availability in the next two weeks';
-  const date = new Date(next.start);
-  const day = date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
-  return `Next available ${day} · ${formatTime(next.start)}`;
 }

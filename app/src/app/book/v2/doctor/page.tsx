@@ -5,7 +5,7 @@ import { listPractitionerOfferings } from '@/lib/data/offering-repo';
 import { PRIORITY_TIER_ORDER } from '@/lib/data/offering-resolution';
 import { getDataProvider } from '@/lib/data';
 import { getLocale } from '@/lib/i18n-server';
-import { getNextAvailableSlot } from '@/lib/booking/next-available';
+import { getAvailabilitySummary } from '@/lib/booking/next-available';
 import { DoctorFlow, type DoctorOpt } from './doctor-flow';
 
 export const dynamic = 'force-dynamic';
@@ -43,9 +43,15 @@ export default async function BookV2DoctorPage({
         const practitioner = await dp.getPractitionerById(uuid).catch(() => null);
         if (!practitioner || !practitioner.active) return null;
         // No service is chosen yet at this step, so this is a preview figure
-        // only — sorts and reassures, but the real slot list (with the
-        // service's actual duration) is fetched once one is picked.
-        const nextAvailable = await getNextAvailableSlot(dp, uuid, selectedBranch.id, rows[0]?.service.durationMinutes);
+        // only — sorts, reassures, and offers quick-pick times, but the real
+        // slot list (with the service's actual duration) is fetched once a
+        // service is picked.
+        const { nextSlot: nextAvailable, previewSlots } = await getAvailabilitySummary(
+          dp,
+          uuid,
+          selectedBranch.id,
+          rows[0]?.service.durationMinutes,
+        );
         // A doctor can have several offerings (one per service) at this
         // branch, each with its own priority — use their best (lowest) one
         // as the tiebreaker signal, same idea as auto-assignment ranking.
@@ -62,6 +68,7 @@ export default async function BookV2DoctorPage({
           specialty: practitioner.specialty,
           photoUrl: practitioner.photoUrl ?? null,
           nextAvailable,
+          previewSlots,
           assignmentPriorityTier: bestOffering.assignmentPriorityTier,
           assignmentPriority: bestOffering.assignmentPriority,
           services: rows.map((row) => ({

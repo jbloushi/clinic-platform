@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
       ]);
       if (!practitioner || !practitioner.active || !config) return null;
 
-      const { nextSlot, days } = await getAvailabilitySummary(
+      const { nextSlot, previewSlots } = await getAvailabilitySummary(
         dp,
         offering.specialistOpenemrUuid,
         branchId,
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
         durationMinutes: config.durationMinutes,
         priceMinor: config.priceMinor,
         nextSlot,
-        availableDays: days,
+        previewSlots,
         assignmentPriorityTier: offering.assignmentPriorityTier,
         assignmentPriority: offering.assignmentPriority,
       };

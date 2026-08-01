@@ -29,15 +29,18 @@ export async function getNextAvailableSlot(
   return next ? { start: next.start, end: next.end } : null;
 }
 
-export type DayAvailability = { date: ISODate; count: number };
+export type PreviewSlot = Pick<Slot, 'start' | 'end'>;
+
+/** How many distinct days' earliest slot to surface as quick-book buttons. */
+const DEFAULT_PREVIEW_DAYS = 5;
 
 /**
- * Same search as `getNextAvailableSlot`, but also buckets every available
- * slot by calendar day across the whole range — one `getAvailableSlots` call
- * covers both, so a caller that needs the day-by-day shape (not just the
- * single soonest slot) doesn't have to fetch twice. Every date in [from, to]
- * appears, including zero-count days, so a caller can render a fixed-width
- * strip without gaps.
+ * Same search as `getNextAvailableSlot`, but also returns up to
+ * `maxPreviewDays` "quick pick" slots — one per day, earliest first, across
+ * up to that many distinct days — so a doctor card can offer real tappable
+ * times ("Today 2:00", "Tomorrow 10:30", "Thu 9:00"...) instead of a single
+ * "next available" line. One `getAvailableSlots` call covers both — no
+ * separate fetch needed for the preview.
  */
 export async function getAvailabilitySummary(
   dp: DataProvider,
@@ -45,25 +48,26 @@ export async function getAvailabilitySummary(
   branchId: string,
   durationMinutes?: number,
   range?: { from: ISODate; to: ISODate },
-): Promise<{ nextSlot: Pick<Slot, 'start' | 'end'> | null; days: DayAvailability[] }> {
+  maxPreviewDays: number = DEFAULT_PREVIEW_DAYS,
+): Promise<{ nextSlot: PreviewSlot | null; previewSlots: PreviewSlot[] }> {
   const from = range?.from ?? new Date().toISOString().slice(0, 10);
   const to = range?.to ?? new Date(Date.now() + SEARCH_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
   const slots = await dp.getAvailableSlots(practitionerId, from, to, durationMinutes, { branchId });
-  const available = slots.filter((s) => s.available && new Date(s.start) > new Date());
-  const nextSlot = [...available].sort((a, b) => a.start.localeCompare(b.start))[0] ?? null;
+  const available = slots
+    .filter((s) => s.available && new Date(s.start) > new Date())
+    .sort((a, b) => a.start.localeCompare(b.start));
+  const nextSlot = available[0] ?? null;
 
-  const counts = new Map<string, number>();
+  const earliestByDate = new Map<string, PreviewSlot>();
   for (const s of available) {
     const date = s.start.slice(0, 10);
-    counts.set(date, (counts.get(date) ?? 0) + 1);
+    if (!earliestByDate.has(date)) earliestByDate.set(date, { start: s.start, end: s.end });
   }
+  const previewSlots = [...earliestByDate.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(0, maxPreviewDays)
+    .map(([, slot]) => slot);
 
-  const days: DayAvailability[] = [];
-  for (let d = new Date(`${from}T00:00:00`); d <= new Date(`${to}T00:00:00`); d.setDate(d.getDate() + 1)) {
-    const date = d.toISOString().slice(0, 10);
-    days.push({ date, count: counts.get(date) ?? 0 });
-  }
-
-  return { nextSlot: nextSlot ? { start: nextSlot.start, end: nextSlot.end } : null, days };
+  return { nextSlot: nextSlot ? { start: nextSlot.start, end: nextSlot.end } : null, previewSlots };
 }
